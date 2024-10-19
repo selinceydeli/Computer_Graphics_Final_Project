@@ -1,0 +1,128 @@
+# Ignore the build folder
+build/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+logs/
+spring.log
+
+# BlueJ files
+*.ctxt
+
+# Maven files
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle files
+.gradle/
+build/
+
+# Windows file
+Thumbs.db
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear during local indexing or usage
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux specific
+*~
+
+# Trash folder which can appear on some Linux distributions
+.Trash*
+
+# General backup files
+*.bak
+*.backup
+*.swp
+*.swo
+*.tmp
+*.log
+
+# Python Bytecode files (if using Python)
+__pycache__/
+*.py[cod]
+
+# Node modules (if using Node.js)
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE Specific files (Optional)
+# IntelliJ IDEA, WebStorm, etc.
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim swap files
+*.swp
+
+# JetBrains Rider
+.idea/
+
+# macOS Finder folder attributes
+#.DS_Store
+
+# Compiled object files
+*.o
+*.out
+*.class
+
+# Lock files
+*.lock
+
+
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Database files
+*.h2.db
+*.mv.db
+
+# OS-specific files
+*.old
+*.orig
+*.rej
+".DS_Store" 
