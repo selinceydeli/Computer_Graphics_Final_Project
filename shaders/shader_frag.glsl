@@ -3,9 +3,7 @@
 // Global variables for lighting calculations.
 //uniform vec3 viewPos;
 uniform sampler2D texShadow;
-uniform sampler2D texLight;
 
-uniform int applyTexture; 
 uniform int isSpotlight;
 uniform int shadows;
 uniform int pcf;
@@ -15,7 +13,6 @@ uniform mat4 lightMVP;
 uniform vec3 lightPos;
 
 // config uniforms, use these to control the shader from UI
-uniform int samplingMode;
 uniform int peelingMode;
 uniform int lightMode;
 uniform int lightColorMode;
@@ -71,17 +68,6 @@ float changeLightMode(vec2 shadowMapCoord) {
 
     // Normal light mode
     return 1.0f;
-}
-
-vec3 changeLightColor(vec2 shadowMapCoord, float bias) {
-    // Textured light
-    if (applyTexture == 1) {
-        vec3 sampledColor = texture(texLight, shadowMapCoord + vec2(bias)).rgb;
-        return sampledColor;
-    }
-
-    // White light mode
-    return vec3(1.0f);  
 }
 
 void main()

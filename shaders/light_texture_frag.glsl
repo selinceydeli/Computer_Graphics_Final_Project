@@ -2,7 +2,6 @@
 
 // Global variables for lighting calculations.
 //uniform vec3 viewPos;
-uniform sampler2D texShadow;
 uniform sampler2D texLight;
 
 uniform int applyTexture; 
@@ -12,7 +11,6 @@ uniform mat4 lightMVP;
 uniform vec3 lightPos;
 
 // config uniforms, use these to control the shader from UI
-uniform int samplingMode;
 uniform int peelingMode;
 uniform int lightMode;
 uniform int lightColorMode;

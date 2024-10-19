@@ -256,8 +256,8 @@ std::vector<Mesh> loadMeshesFromDirectory(const std::string& dir_path) {
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
-    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
 
     // parse initial scene config
     toml::table config;
@@ -717,32 +717,21 @@ int main(int argc, char** argv)
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, texShadow);
                 glUniform1i(mainShader.getUniformLocation("texShadow"), 1);
-                glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, texLight);
-                glUniform1i(mainShader.getUniformLocation("texLight"), 2);
-                int applyTextureInt = applyTexture ? 1 : 0;
                 int isSpotlightInt = lights[selectedLightIndex].is_spotlight ? 1 : 0;
                 int shadowsInt = shadows ? 1 : 0;
                 int pcfInt = pcf ? 1 : 0;
-                int transparencyInt = transparency ? 1 : 0; 
-                glUniform1i(mainShader.getUniformLocation("transparency"), transparencyInt);
-                glUniform1i(mainShader.getUniformLocation("applyTexture"), applyTextureInt);
                 glUniform1i(mainShader.getUniformLocation("isSpotlight"), isSpotlightInt);
                 glUniform1i(mainShader.getUniformLocation("shadows"), shadowsInt);
                 glUniform1i(mainShader.getUniformLocation("pcf"), pcfInt);
                 glUniformMatrix4fv(mainShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
                 glUniformMatrix4fv(mainShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(lightMVP));
                 glUniform3fv(mainShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
-                glUniform1i(mainShader.getUniformLocation("samplingMode"), samplingMode);
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(mainShader);
             }
 
             if (lights[selectedLightIndex].has_texture) {
                 lightTextureShader.bind();
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, texShadow);
-                glUniform1i(lightTextureShader.getUniformLocation("texShadow"), 1);
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, texLight);
                 glUniform1i(lightTextureShader.getUniformLocation("texLight"), 2);
@@ -751,7 +740,6 @@ int main(int argc, char** argv)
                 glUniformMatrix4fv(lightTextureShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
                 glUniformMatrix4fv(lightTextureShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(lightMVP));
                 glUniform3fv(lightTextureShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
-                glUniform1i(lightTextureShader.getUniformLocation("samplingMode"), samplingMode);
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(lightTextureShader);
             }
@@ -1198,30 +1186,21 @@ int main(int argc, char** argv)
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, texShadow);
                 glUniform1i(mainShader.getUniformLocation("texShadow"), 1);
-                glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, texLight);
-                glUniform1i(mainShader.getUniformLocation("texLight"), 2);
-                int applyTextureInt = applyTexture ? 1 : 0;
                 int isSpotlightInt = lights[selectedLightIndex].is_spotlight ? 1 : 0;
                 int shadowsInt = shadows ? 1 : 0;
                 int pcfInt = pcf ? 1 : 0;
-                glUniform1i(mainShader.getUniformLocation("applyTexture"), applyTextureInt);
                 glUniform1i(mainShader.getUniformLocation("isSpotlight"), isSpotlightInt);
                 glUniform1i(mainShader.getUniformLocation("shadows"), shadowsInt);
                 glUniform1i(mainShader.getUniformLocation("pcf"), pcfInt);
                 glUniformMatrix4fv(mainShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
                 glUniformMatrix4fv(mainShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(lightMVP));
                 glUniform3fv(mainShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
-                glUniform1i(mainShader.getUniformLocation("samplingMode"), samplingMode);
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(mainShader);
             }
 
-            if (applyTexture) {
+            if (lights[selectedLightIndex].has_texture) {
                 lightTextureShader.bind();
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, texShadow);
-                glUniform1i(lightTextureShader.getUniformLocation("texShadow"), 1);
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, texLight);
                 glUniform1i(lightTextureShader.getUniformLocation("texLight"), 2);
@@ -1230,7 +1209,6 @@ int main(int argc, char** argv)
                 glUniformMatrix4fv(lightTextureShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
                 glUniformMatrix4fv(lightTextureShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(lightMVP));
                 glUniform3fv(lightTextureShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
-                glUniform1i(lightTextureShader.getUniformLocation("samplingMode"), samplingMode);
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(lightTextureShader);
             }
