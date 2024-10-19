@@ -1,24 +1,21 @@
-#version 410
+#version 410 core
 
-uniform mat4 mvpMatrix;
-uniform mat4 modelMatrix;
-// Normals should be transformed differently than positions:
-// https://paroj.github.io/gltut/Illumination/Tut09%20Normal%20Transformation.html
-uniform mat3 normalModelMatrix;
+// Model/view/projection matrix
+uniform mat4 mvp;
 
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec2 texCoord;
+// Per-vertex attributes
+in vec3 pos; // World-space position
+in vec3 normal; // World-space normal
 
-out vec3 fragPosition;
+// Data to pass to fragment shader
+out vec3 fragPos;
 out vec3 fragNormal;
-out vec2 fragTexCoord;
 
-void main()
-{
-    gl_Position = mvpMatrix * vec4(position, 1);
-    
-    fragPosition    = (modelMatrix * vec4(position, 1)).xyz;
-    fragNormal      = normalModelMatrix * normal;
-    fragTexCoord    = texCoord;
+void main() {
+	// Transform 3D position into on-screen position
+    gl_Position = mvp * vec4(pos, 1.0);
+
+    // Pass position and normal through to fragment shader
+    fragPos = pos;
+    fragNormal = normal;
 }

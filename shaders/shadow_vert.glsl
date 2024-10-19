@@ -1,10 +1,12 @@
-#version 410
+#version 410 core
 
-uniform mat4 mvpMatrix;
+// Model/view/projection matrix
+uniform mat4 mvp;
 
-layout(location = 0) in vec3 position;
+// Per-vertex attributes
+in vec3 pos; // World-space position
 
-void main()
-{
-    gl_Position = mvpMatrix * vec4(position, 1);
+void main() {
+	// Transform 3D position into on-screen position
+    gl_Position = mvp * vec4(pos, 1.0);
 }

@@ -1,6 +1,5 @@
-#version 410
+#version 410 core
 
-//Empty fragment shader to keep mac drivers happy
-void main()
-{
+void main() {
+    // gl_FragDepth = gl_FragCoord.z;
 }

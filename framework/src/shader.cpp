@@ -60,7 +60,7 @@ void Shader::bindUniformBlock(const std::string& blockName, GLuint bindingLocati
         glUniformBlockBinding(m_program, blockIdx, bindingLocation);
         glBindBufferBase(GL_UNIFORM_BUFFER, bindingLocation, uniformBlockBuffer);
     } else {
-        std::cout << "Could not bind uniform block " << blockName << " invalid name" << std::endl;
+        std::cout << "Warning : Could not bind uniform block " << blockName << " invalid name" << std::endl;
     }
 }
 
