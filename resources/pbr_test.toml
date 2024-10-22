@@ -1,24 +1,25 @@
 [mesh]
-#path = "resources/quadsTransparent.obj"
-path = "resources/animation"
+path = "resources/dragon.obj"
 animated = false 
 
 [material]
-kd = [0.5, 0.5, 0.5]
-ks = [0.5, 0.5, 0.5]
+ks = [1.0, 0.782, 0.344]
+kd = [1.0, 1.0, 1.0]
 shininess = 3.0
 toonDiscretize = 4.0
 toonSpecularThreshold = 0.49
+roughness = 0.5
+metallic = 1.0
 
 [lights]
 # Define multiple lights with their respective positions, colors, etc.
 positions = [
-    [5.0, 5.5, 0.0],
+    [1.0, 1.5, 0.0],
     [-3.0, 2.0, 1.0],  # Second light
     [0.0, 10.0, -5.0]  # Third light
 ]
 colors = [
-    [0.9, 0.9, 0.9],
+    [1.0, 1.0, 1.0],
     [0.6, 0.2, 0.2],  # Second light color
     [0.2, 0.8, 0.4]   # Third light color
 ]
@@ -43,7 +44,7 @@ dist = 2.0
 fovy = 50.0
 
 [render_settings]
-diffuse_model = "toon" # or "lambert" or "toon" or "x-toon"
-specular_model = "blinn-phong" # or "phong" or "blinn-phong" or "toon"
+diffuse_model = "pbr" # or "lambert" or "toon" or "x-toon" or "pbr"
+specular_model = "none" # or "phong" or "blinn-phong" or "toon"
 shadows = false # or true
 pcf = false # or false

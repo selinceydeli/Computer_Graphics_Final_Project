@@ -57,7 +57,7 @@ bool toonLightingSpecular = false;
 bool toonxLighting = false;
 */
 
-std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting"};
+std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading"};
 std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
 
 std::array samplingModes {"Single Sample", "PCF"};
@@ -80,6 +80,9 @@ struct {
     // Toon
     int toonDiscretize = 4;
     float toonSpecularThreshold = 0.49f;
+    // pbr
+    float roughness = 0.5;
+    float metallic = 1.0;
 } shadingData;
 
 struct Texture {
@@ -124,10 +127,12 @@ void imgui()
 
     // Color pickers for Kd and Ks
     ImGui::ColorEdit3("Kd", &shadingData.kd[0]);
-    ImGui::ColorEdit3("Ks", &shadingData.ks[0]);
+    ImGui::ColorEdit3("Ks/Albedo", &shadingData.ks[0]);
 
     ImGui::SliderInt("Toon Discretization", &shadingData.toonDiscretize, 1, 10);
     ImGui::SliderFloat("Toon Specular Threshold", &shadingData.toonSpecularThreshold, 0.0f, 1.0f);
+    ImGui::SliderFloat("Roughness", &shadingData.roughness, 0.0f, 1.0f);
+    ImGui::SliderFloat("Metallic", &shadingData.metallic, 0.0f, 1.0f);
 
     /*
     ImGui::Separator();
@@ -257,7 +262,7 @@ int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml"; // Scene for animation
 
     // parse initial scene config
     toml::table config;
@@ -271,6 +276,8 @@ int main(int argc, char** argv)
     shadingData.kd = tomlArrayToVec3(config["material"]["kd"].as_array()).value();
     shadingData.ks = tomlArrayToVec3(config["material"]["ks"].as_array()).value();
     shadingData.shininess = config["material"]["shininess"].value_or(0.0f);
+    shadingData.roughness = config["material"]["roughness"].value_or(0.0f);
+    shadingData.metallic = config["material"]["metallic"].value_or(0.0f);
     shadingData.toonDiscretize = (int) config["material"]["toonDiscretize"].value_or(0);
     shadingData.toonSpecularThreshold = config["material"]["toonSpecularThreshold"].value_or(0.0f);
 
@@ -320,8 +327,12 @@ int main(int argc, char** argv)
         diffuseMode = 1;
     } else if (diffuse_model == "toon") {
         diffuseMode = 2;
-    } else {
+    } else if (diffuse_model == "x-toon") {
         diffuseMode = 3;
+    } else if (diffuse_model == "pbr") {
+        diffuseMode = 4;
+    } else {
+        diffuseMode = 0;
     }
 
     if (specular_model == "none") {
@@ -342,6 +353,7 @@ int main(int argc, char** argv)
     auto mesh_path = std::string(RESOURCE_ROOT) + config["mesh"]["path"].value_or("resources/dragon.obj");
     std::cout << mesh_path << std::endl;
 
+    #pragma region Render
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
@@ -403,7 +415,8 @@ int main(int argc, char** argv)
         const Shader toonDiffuseShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_diffuse_frag.glsl").build();
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
-
+        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();
+        
         const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
 
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
@@ -411,7 +424,6 @@ int main(int argc, char** argv)
 
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
         //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
-
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
@@ -663,6 +675,17 @@ int main(int argc, char** argv)
                     glUniform3fv(xToonShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
                     render(xToonShader);
                     break;
+                case 4: // pbr
+                    pbrShader.bind();
+                    glUniform3fv(pbrShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                    glUniform3fv(pbrShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+                    glUniform3fv(pbrShader.getUniformLocation("cameraPos"), 1, glm::value_ptr(cameraPos));
+                    glUniform3fv(pbrShader.getUniformLocation("albedo"), 1, glm::value_ptr(shadingData.ks));
+                    glUniform1f(pbrShader.getUniformLocation("roughness"), shadingData.roughness);
+                    glUniform1f(pbrShader.getUniformLocation("metallic"), shadingData.metallic);
+                    render(pbrShader);
+                    break;
+
                 default: // Debug mode as default
                     debugShader.bind();
                     render(debugShader);
@@ -762,6 +785,8 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
     } 
+    #pragma endregion
+    #pragma region Animation
     else { // if animated
         
         animationMeshes = loadMeshesFromDirectory(mesh_path);
@@ -1231,6 +1256,7 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
     }
+    #pragma endregion
     
     return 0;
 }
