@@ -71,6 +71,9 @@ int specularMode = 0;
 
 bool transparency = true;
 
+bool applySmoothPath = false;     
+bool showBezierCurve = false;      
+
 struct {
     // Diffuse (Lambert)
     glm::vec3 kd { 0.5f };
@@ -165,6 +168,11 @@ void imgui()
     ImGui::Checkbox("Enable PCF", &pcf);
 
     ImGui::Separator();
+    ImGui::Text("Smooth Path Along the Bezier Curve");
+    ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
+    //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
+
+    ImGui::Separator();
     ImGui::Text("Lights");
 
     // Display lights in scene
@@ -257,12 +265,81 @@ std::vector<Mesh> loadMeshesFromDirectory(const std::string& dir_path) {
     return meshes;
 }
 
+// Methods for implementing Smooth Paths with Bezier Curve 
+float t = 0.0f;                   // Time along the Bezier curve
+size_t currentCurve = 0;          // Current Bezier curve
+std::vector<glm::vec3> bezierCurvePath;
+
+glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) { 
+    float factor = (1.0 - t);
+    float factorDouble = factor * factor;
+    float factorTriple = factor * factor * factor;
+
+    glm::vec3 bezier = factorTriple * p0;
+    bezier += 3 * factorDouble * t * p1;
+    bezier += 3 * factor * t * t * p2;
+    bezier += t * t * t * p3;
+
+    return bezier;
+}
+
+// Implement 4 Consecutive Bezier Curves 
+std::vector<std::vector<glm::vec3>> bezierControlPointsSets = {
+    {
+        glm::vec3(4.0f, 1.0f, 0.0f),  // p0
+        glm::vec3(3.0f, 2.5f, 4.0f),  // p1
+        glm::vec3(1.0f, 1.5f, 4.5f),  // p2
+        glm::vec3(0.0f, 1.0f, 4.0f)   // p3
+    },
+    {
+        glm::vec3(0.0f, 1.0f, 4.0f),
+        glm::vec3(-3.0f, 1.5f, 3.0f),
+        glm::vec3(-4.5f, 2.0f, 0.0f),
+        glm::vec3(-4.5f, 1.0f, 0.0f)
+    },
+    {
+        glm::vec3(-4.5f, 1.0f, 0.0f),
+        glm::vec3(-3.0f, 2.0f, -3.0f),
+        glm::vec3(0.0f, 1.5f, -4.0f),
+        glm::vec3(4.0f, 1.0f, 0.0f)
+    },
+    {
+        glm::vec3(4.0f, 1.0f, 0.0f),  
+        glm::vec3(2.0f, 2.0f, -4.0f),  
+        glm::vec3(-2.0f, 1.5f, -4.0f), 
+        glm::vec3(-4.0f, 1.0f, 0.0f)   
+    }
+};
+
+void moveAlongBezierCurves(float deltaTime) {
+    if (currentCurve >= bezierControlPointsSets.size()) return;  // Stop when all curves are completed
+
+    t += deltaTime * 0.1; // Slow the movement of the curve by multiplying with 0.1
+
+    if (t > 1.0f) {
+        t = 0.0f;  // Reset t for the next curve
+        currentCurve++;  // Move to the next Bézier curve
+        
+        // If we have reached the last curve, stop after completing it
+        if (currentCurve >= bezierControlPointsSets.size()) {
+            currentCurve = bezierControlPointsSets.size();  // Keep it capped at the size, effectively stopping
+            return;  // Exit to prevent further updates
+        }
+    }
+
+    const auto& controlPoints = bezierControlPointsSets[currentCurve];
+    glm::vec3 newPosition = computeBezierPoint(t, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
+    lights[selectedLightIndex].position = newPosition;
+}
+
+
 // Program entry point. Everything starts here.
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
-    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml"; // Scene for animation
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
 
     // parse initial scene config
     toml::table config;
@@ -765,6 +842,38 @@ int main(int argc, char** argv)
                 glUniform3fv(lightTextureShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(lightTextureShader);
+            }
+
+            // Implement smooth path along the Bezier Curve
+            if (applySmoothPath) {
+                float currentTime = glfwGetTime();
+                static float lastFrameTime = 0.0f;
+                float timeChange = currentTime - lastFrameTime;
+                lastFrameTime = currentTime;
+                moveAlongBezierCurves(timeChange);
+            }
+
+            if (showBezierCurve) {
+                glDisable(GL_DEPTH_TEST);
+                //glEnable(GL_BLEND);
+                //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                glColor3f(1.0f, 0.0f, 0.0f); // Set the color of the curve to red
+
+                // Render Bezier Curve
+                glBegin(GL_LINE_STRIP);
+                for (const auto& controlPoints : bezierControlPointsSets) {
+                    for (float t = 0.0f; t <= 1.0f; t += 0.01f) { 
+                        glm::vec3 point = computeBezierPoint(t, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
+                        glVertex3fv(glm::value_ptr(point));
+                    }
+                }
+                glEnd();
+
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+
+                //glEnable(GL_DEPTH_TEST);  // Re-enable depth testing after drawing the curve
+                //glDisable(GL_BLEND);
             }
 
             // Restore default depth test settings and disable blending.
