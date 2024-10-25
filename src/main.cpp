@@ -315,15 +315,14 @@ void moveAlongBezierCurves(float deltaTime) {
     if (currentCurve >= bezierControlPointsSets.size()) return;  // Stop when all curves are completed
 
     t += deltaTime * 0.1; // Slow the movement of the curve by multiplying with 0.1
-
     if (t > 1.0f) {
         t = 0.0f;  // Reset t for the next curve
-        currentCurve++;  // Move to the next Bézier curve
+        currentCurve++;  // Move to the next curve
         
-        // If we have reached the last curve, stop after completing it
+        // End movement after completing the last curve
         if (currentCurve >= bezierControlPointsSets.size()) {
-            currentCurve = bezierControlPointsSets.size();  // Keep it capped at the size, effectively stopping
-            return;  // Exit to prevent further updates
+            currentCurve = bezierControlPointsSets.size();  
+            return; 
         }
     }
 
@@ -851,29 +850,6 @@ int main(int argc, char** argv)
                 float timeChange = currentTime - lastFrameTime;
                 lastFrameTime = currentTime;
                 moveAlongBezierCurves(timeChange);
-            }
-
-            if (showBezierCurve) {
-                glDisable(GL_DEPTH_TEST);
-                //glEnable(GL_BLEND);
-                //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-                glColor3f(1.0f, 0.0f, 0.0f); // Set the color of the curve to red
-
-                // Render Bezier Curve
-                glBegin(GL_LINE_STRIP);
-                for (const auto& controlPoints : bezierControlPointsSets) {
-                    for (float t = 0.0f; t <= 1.0f; t += 0.01f) { 
-                        glm::vec3 point = computeBezierPoint(t, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
-                        glVertex3fv(glm::value_ptr(point));
-                    }
-                }
-                glEnd();
-
-                glBlendFunc(GL_DST_COLOR, GL_ZERO);
-
-                //glEnable(GL_DEPTH_TEST);  // Re-enable depth testing after drawing the curve
-                //glDisable(GL_BLEND);
             }
 
             // Restore default depth test settings and disable blending.
