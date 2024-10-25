@@ -5,12 +5,16 @@
 
 // Global variables for lighting calculations
 //uniform vec3 viewPos;
+// const int NUM_LIGHTS = 3;
+// uniform vec3 lightPos[NUM_LIGHTS];
+// uniform vec3 lightColor[NUM_LIGHTS];
 uniform vec3 lightPos;    
 uniform vec3 lightColor;  
 uniform vec3 cameraPos;  
 uniform vec3 albedo;  // Base color, we use this instead of Ks 
 uniform float roughness;
 uniform float metallic;
+uniform float intensity;
 
 // Output for on-screen color
 out vec4 outColor;
@@ -49,15 +53,16 @@ void main()
 {
     // Compute basic vectors
     vec3 N = normalize(fragNormal);
-    vec3 L = normalize(lightPos - fragPos);                             // Light direction 
     vec3 V = normalize(cameraPos - fragPos);                            // View direction
+    vec3 L = normalize(lightPos - fragPos);                             // Light direction 
     vec3 H = normalize(L + V);                                          // Halfway vector H = (L + V) / ||L + V||
     N = dot(N, L) < 0.0 ? -N:N;
+    vec3 accumColor = vec3(0.0);
 
     // Compute radiance
     float dis2Light = distance(lightPos, fragPos);
     float attenuation = clamp(1.0 / dis2Light, 0.2, 1.0);  // Limit the attenuation
-    vec3 LightIntensity = lightColor * attenuation * 2;
+    vec3 LightIntensity = lightColor * attenuation * intensity;
 
     // Cook-Torrance Specular Microfacets Model
     vec3 F = fresnel(V, H);
@@ -69,11 +74,11 @@ void main()
 
     // Diffuse Light
     vec3 diffuse = albedo / PI;
-
+    accumColor += ((1.0 - metallic) * diffuse + specular) * NdotL * LightIntensity;
+    
     // Ambient
     vec3 ambient = vec3(0.1) * albedo;
 
     // Sum up
-    vec3 radiance = ambient + (1.0 - metallic) * diffuse + specular;
-    outColor = vec4(radiance * NdotL * LightIntensity, 1.0);                       // Multiply the cos value
+    outColor = vec4(ambient + accumColor, 1.0);                       // Multiply the cos value
 }

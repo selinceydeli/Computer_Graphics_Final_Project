@@ -10,6 +10,7 @@ toonDiscretize = 4.0
 toonSpecularThreshold = 0.49
 roughness = 0.5
 metallic = 1.0
+intensity = 2.0
 
 [lights]
 # Define multiple lights with their respective positions, colors, etc.

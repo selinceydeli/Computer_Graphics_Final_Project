@@ -86,6 +86,7 @@ struct {
     // pbr
     float roughness = 0.5;
     float metallic = 1.0;
+    float intensity = 1.0;
 } shadingData;
 
 struct Texture {
@@ -136,6 +137,7 @@ void imgui()
     ImGui::SliderFloat("Toon Specular Threshold", &shadingData.toonSpecularThreshold, 0.0f, 1.0f);
     ImGui::SliderFloat("Roughness", &shadingData.roughness, 0.0f, 1.0f);
     ImGui::SliderFloat("Metallic", &shadingData.metallic, 0.0f, 1.0f);
+    ImGui::SliderFloat("Light Intensity", &shadingData.intensity, 1.0f, 10.0f);
 
     /*
     ImGui::Separator();
@@ -336,9 +338,9 @@ void moveAlongBezierCurves(float deltaTime) {
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
+    // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
-    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
 
     // parse initial scene config
     toml::table config;
@@ -354,6 +356,7 @@ int main(int argc, char** argv)
     shadingData.shininess = config["material"]["shininess"].value_or(0.0f);
     shadingData.roughness = config["material"]["roughness"].value_or(0.0f);
     shadingData.metallic = config["material"]["metallic"].value_or(0.0f);
+    shadingData.intensity = config["material"]["intensity"].value_or(1.0f);
     shadingData.toonDiscretize = (int) config["material"]["toonDiscretize"].value_or(0);
     shadingData.toonSpecularThreshold = config["material"]["toonSpecularThreshold"].value_or(0.0f);
 
@@ -753,12 +756,14 @@ int main(int argc, char** argv)
                     break;
                 case 4: // pbr
                     pbrShader.bind();
+                    // glUniform1i(pbrShader.getUniformLocation("NUM_LIGHTS"), 3);
                     glUniform3fv(pbrShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                     glUniform3fv(pbrShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
                     glUniform3fv(pbrShader.getUniformLocation("cameraPos"), 1, glm::value_ptr(cameraPos));
                     glUniform3fv(pbrShader.getUniformLocation("albedo"), 1, glm::value_ptr(shadingData.ks));
                     glUniform1f(pbrShader.getUniformLocation("roughness"), shadingData.roughness);
                     glUniform1f(pbrShader.getUniformLocation("metallic"), shadingData.metallic);
+                    glUniform1f(pbrShader.getUniformLocation("intensity"), shadingData.intensity);
                     render(pbrShader);
                     break;
 
