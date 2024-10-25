@@ -74,7 +74,12 @@ bool transparency = true;
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
 bool moveCamera = false;  
+
+bool useOriginalCamera = true; 
 bool isTopViewCamera = false;
+bool isFrontViewCamera = false;
+bool isLeftViewCamera = false;
+bool isRightViewCamera = false;
 
 struct {
     // Diffuse (Lambert)
@@ -177,9 +182,37 @@ void imgui()
     ImGui::Checkbox("Enable Camera Movement", &moveCamera);
     //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
 
+    const char* cameraViews[] = { "Original", "Top View", "Front View", "Left View", "Right View" };
+    static int selectedCameraIndex = 0;
+
     ImGui::Separator();
-    ImGui::Text("Camera View");
-    ImGui::Checkbox("Enable Top-View Camera", &isTopViewCamera);
+    ImGui::Text("Select Camera View");
+    if (ImGui::Combo("Camera View", &selectedCameraIndex, cameraViews, IM_ARRAYSIZE(cameraViews))) {
+        // Reset
+        useOriginalCamera = false;
+        isTopViewCamera = false;
+        isFrontViewCamera = false;
+        isLeftViewCamera = false;
+        isRightViewCamera = false;
+
+        switch (selectedCameraIndex) {
+            case 0:  // Original
+                useOriginalCamera = true;
+                break;
+            case 1:  // Top View
+                isTopViewCamera = true;
+                break;
+            case 2:  // Front View
+                isFrontViewCamera = true;
+                break;
+            case 3:  // Left View
+                isLeftViewCamera = true;
+                break;
+            case 4:  // Right View
+                isRightViewCamera = true;
+                break;
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("Lights");
@@ -444,17 +477,32 @@ int main(int argc, char** argv)
         specularMode = 3;
     }
 
-    // Define two cameras
+    // Define multiple views
     Trackball mainCamera { &window, glm::radians(fovY) };
     mainCamera.setCamera(look_at, rotations, dist);
 
     Trackball topViewCamera { &window, glm::radians(fovY) };
-    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); // Top-down rotation
+    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); 
     topViewCamera.setCamera(look_at, topViewRotations, dist);
+
+    Trackball rightViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 rightViewRotations = glm::vec3(0.0f, glm::radians(90.0f), 0.0f);
+    rightViewCamera.setCamera(look_at, rightViewRotations, dist);
+
+    Trackball leftViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 leftViewRotations = glm::vec3(0.0f, glm::radians(-90.0f), 0.0f);
+    leftViewCamera.setCamera(look_at, leftViewRotations, dist);
+
+    Trackball frontViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 frontViewRotations = glm::vec3(0.0f, glm::radians(0.0f), 0.0f);
+    frontViewCamera.setCamera(look_at, frontViewRotations, dist);
 
     // Define pointers to switch between active cameras
     Trackball* activeCamera = &mainCamera;
     Trackball* topViewCameraPtr = &topViewCamera;
+    Trackball* rightViewCameraPtr = &rightViewCamera;
+    Trackball* leftViewCameraPtr = &leftViewCamera;
+    Trackball* frontViewCameraPtr = &frontViewCamera;
 
     // read mesh
     bool animated = config["mesh"]["animated"].value_or(false);
@@ -643,7 +691,18 @@ int main(int argc, char** argv)
 
             imgui();
 
-            activeCamera = isTopViewCamera ? topViewCameraPtr : &mainCamera;
+            // Set the active camera
+            if (isTopViewCamera) {
+                activeCamera = topViewCameraPtr;
+            } else if (isRightViewCamera) {
+                activeCamera = rightViewCameraPtr;
+            } else if (isLeftViewCamera) {
+                activeCamera = leftViewCameraPtr;
+            } else if (isFrontViewCamera) {
+                activeCamera = frontViewCameraPtr;
+            } else {
+                activeCamera = &mainCamera; // Original camera view set by the toml file
+            }
 
             // Clear the framebuffer to black and depth to maximum value (ranges from [-1.0 to +1.0]).
             glViewport(0, 0, window.getWindowSize().x, window.getWindowSize().y);
