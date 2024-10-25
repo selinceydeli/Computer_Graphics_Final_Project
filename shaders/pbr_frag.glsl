@@ -15,6 +15,7 @@ uniform vec3 albedo;  // Base color, we use this instead of Ks
 uniform float roughness;
 uniform float metallic;
 uniform float intensity;
+uniform sampler2D texNormal;
 
 // Output for on-screen color
 out vec4 outColor;
@@ -53,6 +54,7 @@ void main()
 {
     // Compute basic vectors
     vec3 N = normalize(fragNormal);
+    // vec3 N = texture(texNormal, gl_FragCoord.xy).xyz;
     vec3 V = normalize(cameraPos - fragPos);                            // View direction
     vec3 L = normalize(lightPos - fragPos);                             // Light direction 
     vec3 H = normalize(L + V);                                          // Halfway vector H = (L + V) / ||L + V||

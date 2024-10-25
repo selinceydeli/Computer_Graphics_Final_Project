@@ -576,6 +576,25 @@ int main(int argc, char** argv)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
+        // Create Normal Texture
+        // int texWidth, texHeight, texChannels;
+        auto normal_texture_path = std::string(RESOURCE_ROOT) + config["lights"]["texture_path"][0].value_or("resources/normal_map.png");
+        stbi_uc* normal_pixels = stbi_load(normal_texture_path.c_str(), &texWidth, &texHeight, &texChannels, 3); 
+
+        GLuint texNormal;
+        glGenTextures(1, &texNormal);
+        glBindTexture(GL_TEXTURE_2D, texNormal);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, texWidth, texHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, normal_pixels);
+
+        // Set behaviour for when texture coordinates are outside the [0, 1] range.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Set interpolation for texture sampling (GL_NEAREST for no interpolation).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
         // === Create Shadow Texture ===
         GLuint texShadow;
         const int SHADOWTEX_WIDTH = 1024;
@@ -756,6 +775,9 @@ int main(int argc, char** argv)
                     break;
                 case 4: // pbr
                     pbrShader.bind();
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, texNormal);
+                    glUniform1i(pbrShader.getUniformLocation("texNormal"), 0);
                     // glUniform1i(pbrShader.getUniformLocation("NUM_LIGHTS"), 3);
                     glUniform3fv(pbrShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                     glUniform3fv(pbrShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
@@ -870,6 +892,7 @@ int main(int argc, char** argv)
         glDeleteFramebuffers(1, &framebuffer);
         glDeleteTextures(1, &texShadow);
         glDeleteTextures(1, &texLight);
+        glDeleteTextures(1, &texNormal);
         glDeleteTextures(1, &texToon);
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
