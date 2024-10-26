@@ -1,5 +1,5 @@
 [mesh]
-path = "resources/lucy_scene.obj"
+path = "resources/rock.obj"
 animated = false
 
 [material]
