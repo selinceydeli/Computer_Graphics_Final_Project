@@ -15,7 +15,7 @@ uniform vec3 albedo;  // Base color, we use this instead of Ks
 uniform float roughness;
 uniform float metallic;
 uniform float intensity;
-uniform sampler2D texNormal;
+// uniform sampler2D texNormal;
 
 // Output for on-screen color
 out vec4 outColor;

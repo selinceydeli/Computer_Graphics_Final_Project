@@ -214,3 +214,92 @@ void meshFlipZ(Mesh& mesh)
         v.normal.z = -v.normal.z;
     }
 }
+
+#include <iostream>
+#include <fstream>
+#include <cmath>
+
+void calculateTangentsAndBitangents(Mesh& mesh) {
+    // Open a file for output
+    std::ofstream outputFile("/Users/lemon/Documents/TUD/Courses/CGA/computer-graphics-final-project/tangent.txt");
+    if (!outputFile.is_open()) {
+        std::cerr << "Failed to open output file!" << std::endl;
+        return;
+    }
+
+    for (size_t i = 0; i < mesh.triangles.size(); i++) {
+        // Get the indices of the triangle
+        unsigned int i0 = mesh.triangles[i].x;
+        unsigned int i1 = mesh.triangles[i].y;
+        unsigned int i2 = mesh.triangles[i].z;
+
+        // Get the vertices of the triangle
+        Vertex& v0 = mesh.vertices[i0];
+        Vertex& v1 = mesh.vertices[i1];
+        Vertex& v2 = mesh.vertices[i2];
+
+        // Edges of the triangle
+        glm::vec3 edge1 = v1.position - v0.position;
+        glm::vec3 edge2 = v2.position - v0.position;
+
+        // UV differences
+        glm::vec2 deltaUV1 = v1.texCoord - v0.texCoord;
+        glm::vec2 deltaUV2 = v2.texCoord - v0.texCoord;
+
+        // Compute the tangent and bitangent
+        float denominator = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (fabs(denominator) < 1e-6) {
+            outputFile << "Warning: Degenerate UV coordinates detected for triangle " << i << ". Skipping tangent/bitangent calculation.\n";
+            continue;
+        }
+        float f = 1.0f / denominator;
+
+        glm::vec3 tangent;
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent = glm::normalize(tangent);
+
+        glm::vec3 bitangent;
+        bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        bitangent = glm::normalize(bitangent);
+
+        // Check for nan values in tangent and bitangent before accumulating
+        if (std::isnan(tangent.x) || std::isnan(tangent.y) || std::isnan(tangent.z) ||
+            std::isnan(bitangent.x) || std::isnan(bitangent.y) || std::isnan(bitangent.z)) {
+            outputFile << "Warning: Invalid tangent/bitangent detected for triangle " << i << ". Skipping accumulation.\n";
+            continue;
+        }
+
+        // Accumulate the valid tangent and bitangent for each vertex
+        v0.tangent += tangent;
+        v1.tangent += tangent;
+        v2.tangent += tangent;
+
+        v0.bitangent += bitangent;
+        v1.bitangent += bitangent;
+        v2.bitangent += bitangent;
+
+        // Output the tangent and bitangent for this triangle
+        outputFile << "Triangle " << i << ":\n";
+        outputFile << "  Tangent: " << tangent.x << ", " << tangent.y << ", " << tangent.z << "\n";
+        outputFile << "  Bitangent: " << bitangent.x << ", " << bitangent.y << ", " << bitangent.z << "\n";
+    }
+
+    // Normalize the tangents and bitangents for each vertex
+    for (size_t i = 0; i < mesh.vertices.size(); i++) {
+        Vertex& vertex = mesh.vertices[i];
+        vertex.tangent = glm::normalize(vertex.tangent);
+        vertex.bitangent = glm::normalize(vertex.bitangent);
+
+        // Output the final tangent and bitangent for each vertex
+        outputFile << "Vertex " << i << ":\n";
+        outputFile << "  Final Tangent: " << vertex.tangent.x << ", " << vertex.tangent.y << ", " << vertex.tangent.z << "\n";
+        outputFile << "  Final Bitangent: " << vertex.bitangent.x << ", " << vertex.bitangent.y << ", " << vertex.bitangent.z << "\n";
+    }
+
+    // Close the file
+    outputFile.close();
+}
