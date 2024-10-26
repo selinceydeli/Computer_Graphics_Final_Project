@@ -693,27 +693,31 @@ int main(int argc, char** argv)
                 glVertexAttribPointer(shader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
                 glVertexAttribPointer(shader.getAttributeLocation("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 
-                //Normal Mapping: Add Tangent & bitangent space
-                if (diffuseMode == 5)
-                {
-                    // Enable the tangent and bitangent attributes
-                    glEnableVertexAttribArray(2);
-                    glEnableVertexAttribArray(3);
-                    glEnableVertexAttribArray(4);
+                // Execute draw command.
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
-                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
-                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
-                    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+                glBindVertexArray(0);
+            };
+
+            auto renderNormal = [&](const Shader &shader) {
+                // Set the model/view/projection matrix that is used to transform the vertices in the vertex shader.
+                glUniformMatrix4fv(shader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+
+                // Bind vertex data.
+                glBindVertexArray(vao);
+
+                 glVertexAttribPointer(shader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                glVertexAttribPointer(shader.getAttributeLocation("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+                // Enable the tangent and bitangent attributes
+                glEnableVertexAttribArray(2);
+                glEnableVertexAttribArray(3);
+                glEnableVertexAttribArray(4);
+
+                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+                glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+                glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
                     
-
-                    uint texCoordLoc = shader.getAttributeLocation("texCoord");
-                    uint tangentLoc = shader.getAttributeLocation("tangent");
-                    uint bitangentLoc = shader.getAttributeLocation("bitangent");
-                    // std::cout << "texCoord location: " << texCoordLoc << std::endl;
-                    // std::cout << "tangent location: " << tangentLoc << std::endl;
-                    // std::cout << "bitangent location: " << bitangentLoc << std::endl;
-                }
-
                 // Execute draw command.
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
@@ -733,14 +737,6 @@ int main(int argc, char** argv)
             glDepthFunc(GL_EQUAL); // Only draw a pixel if it's depth matches the value stored in the depth buffer.
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
-
-            /*
-            std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting"};
-            std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
-            */
-
-            //for (const Light& light : lights) {
-                //renderedSomething = false;
 
             int applyTextureInt = applyTexture ? 1 : 0;
             switch (diffuseMode) {
@@ -786,9 +782,6 @@ int main(int argc, char** argv)
                     break;
                 case 4: // pbr
                     pbrShader.bind();
-                    // glActiveTexture(GL_TEXTURE0);
-                    // glBindTexture(GL_TEXTURE_2D, texNormal);
-                    // glUniform1i(pbrShader.getUniformLocation("texNormal"), 0);
                     // glUniform1i(pbrShader.getUniformLocation("NUM_LIGHTS"), 3);
                     glUniform3fv(pbrShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                     glUniform3fv(pbrShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
@@ -807,7 +800,8 @@ int main(int argc, char** argv)
                     glUniform3fv(normalShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                     glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
                     glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
-                    render(normalShader);
+                    glUniform3fv(normalShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+                    renderNormal(normalShader);
                     break;
                 default: // Debug mode as default
                     debugShader.bind();

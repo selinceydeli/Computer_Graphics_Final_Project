@@ -9,6 +9,7 @@ out vec4 outColor;
 
 uniform sampler2D texNormal;
 uniform vec3 kd;
+uniform vec3 lightColor;
 
 void main()
 {
@@ -24,7 +25,7 @@ void main()
     vec3 reflectDir = reflect(-lightDir, normal);
 
     // Sample the diffuse color
-    vec3 diffuse = diff * kd;
+    vec3 diffuse = diff * kd * lightColor;
 
     outColor = vec4(diffuse, 1.0);
 }
