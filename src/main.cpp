@@ -696,26 +696,22 @@ int main(int argc, char** argv)
                 //Normal Mapping: Add Tangent & bitangent space
                 if (diffuseMode == 5)
                 {
-                    // glVertexAttribPointer(shader.getAttributeLocation("tangent"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
-                    // glVertexAttribPointer(shader.getAttributeLocation("bitangent"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
-                
-                    // // Enable the tangent and bitangent attributes
-                    // glEnableVertexAttribArray(shader.getAttributeLocation("tangent"));
-                    // glEnableVertexAttribArray(shader.getAttributeLocation("bitangent"));
-
-                    // int tangentLoc = shader.getAttributeLocation("tangent");
-                    // int bitangentLoc = shader.getAttributeLocation("bitangent");
-                    // std::cout << "Tangent Location: " << tangentLoc << std::endl;
-                    // std::cout << "Bitangent Location: " << bitangentLoc << std::endl;
-
-                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
-                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
-                    
                     // Enable the tangent and bitangent attributes
                     glEnableVertexAttribArray(2);
                     glEnableVertexAttribArray(3);
+                    glEnableVertexAttribArray(4);
 
-                    // std::cout << "Set Tangent and Bitangent Attributes." << std::endl;
+                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+                    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+                    
+
+                    uint texCoordLoc = shader.getAttributeLocation("texCoord");
+                    uint tangentLoc = shader.getAttributeLocation("tangent");
+                    uint bitangentLoc = shader.getAttributeLocation("bitangent");
+                    // std::cout << "texCoord location: " << texCoordLoc << std::endl;
+                    // std::cout << "tangent location: " << tangentLoc << std::endl;
+                    // std::cout << "bitangent location: " << bitangentLoc << std::endl;
                 }
 
                 // Execute draw command.
@@ -810,6 +806,7 @@ int main(int argc, char** argv)
                     glUniform1i(normalShader.getUniformLocation("texNormal"), 0);
                     glUniform3fv(normalShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                     glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
+                    glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
                     render(normalShader);
                     break;
                 default: // Debug mode as default

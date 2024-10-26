@@ -1,5 +1,5 @@
 [mesh]
-path = "resources/rock.obj"
+path = "resources/planet.obj"
 animated = false
 
 [material]
