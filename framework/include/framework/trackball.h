@@ -34,6 +34,10 @@ public:
         [[nodiscard]] float distanceFromLookAt() const;
 
 	void setCamera(const glm::vec3 lookAt, const glm::vec3 rotations, const float dist); // Set the position and orientation of the camera.
+	
+	void setLookAt(const glm::vec3& newLookAt) {
+		m_lookAt = newLookAt;
+	}
 
 	// Generate ray given pixel in NDC space (ranging from -1 to +1. (-1,-1) at bottom left, (+1, +1) at top right).
 	[[nodiscard]] Ray generateRay(const glm::vec2& pixel) const;
