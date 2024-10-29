@@ -571,18 +571,33 @@ int main(int argc, char** argv)
         // Create Normal Texture
         // Normal Texture
         int normalWidth, normalHeight, normalChannels;
-        stbi_uc* normal_pixels = stbi_load(RESOURCE_ROOT "resources/normal_map.png", &normalWidth, &normalHeight, &normalChannels, STBI_rgb);
+        stbi_uc* normal_pixels = stbi_load(RESOURCE_ROOT "resources/normal_map1.png", &normalWidth, &normalHeight, &normalChannels, STBI_rgb);
 
         GLuint texNormal;
         glGenTextures(1, &texNormal);
         glBindTexture(GL_TEXTURE_2D, texNormal);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, normalWidth, normalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, normal_pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, normalWidth, normalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, normal_pixels);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         stbi_image_free(normal_pixels);
+
+        // Material Texture
+        int matWidth, matHeight, matChannels;
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/wave.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+
+        GLuint texMat;
+        glGenTextures(1, &texMat);
+        glBindTexture(GL_TEXTURE_2D, texMat);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, matWidth, matHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, mat_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(mat_pixels);
 
 
         // === Create Shadow Texture ===
@@ -698,31 +713,6 @@ int main(int argc, char** argv)
 
                 glBindVertexArray(0);
             };
-
-            auto renderNormal = [&](const Shader &shader) {
-                // Set the model/view/projection matrix that is used to transform the vertices in the vertex shader.
-                glUniformMatrix4fv(shader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
-
-                // Bind vertex data.
-                glBindVertexArray(vao);
-
-                 glVertexAttribPointer(shader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-                glVertexAttribPointer(shader.getAttributeLocation("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-
-                // Enable the tangent and bitangent attributes
-                glEnableVertexAttribArray(2);
-                glEnableVertexAttribArray(3);
-                glEnableVertexAttribArray(4);
-
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
-                glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
-                glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
-                    
-                // Execute draw command.
-                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
-
-                glBindVertexArray(0);
-            };
             
             // Draw mesh into depth buffer but disable color writes.
             glDepthMask(GL_TRUE);
@@ -797,11 +787,33 @@ int main(int argc, char** argv)
                     glActiveTexture(GL_TEXTURE0);
                     glBindTexture(GL_TEXTURE_2D, texNormal);
                     glUniform1i(normalShader.getUniformLocation("texNormal"), 0);
+                    glActiveTexture(GL_TEXTURE1);
+                    // Normal Mapping Texture
+                    glBindTexture(GL_TEXTURE_2D, texToon);
+                    glUniform1i(normalShader.getUniformLocation("texMat"), 1);
                     glUniform3fv(normalShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
-                    glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
-                    glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
-                    glUniform3fv(normalShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
-                    renderNormal(normalShader);
+                    // glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
+                    // glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
+                    // glUniform3fv(normalShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("model"), 1, GL_FALSE, glm::value_ptr(model));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("proj"), 1, GL_FALSE, glm::value_ptr(projection));
+                    // Bind vertex data.
+                    glBindVertexArray(vao);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+                    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+                    // Enable the tangent and bitangent attributes
+                    glEnableVertexAttribArray(2);
+                    glEnableVertexAttribArray(3);
+                    glEnableVertexAttribArray(4);
+                        
+                    // Execute draw command.
+                    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+
+                    glBindVertexArray(0);
                     break;
                 default: // Debug mode as default
                     debugShader.bind();
