@@ -45,6 +45,7 @@ size_t currentMeshIndex = 0;
 const int WIDTH = 1200;
 const int HEIGHT = 800;
 
+bool post_process = false;
 bool show_imgui = true;
 
 /*
@@ -175,6 +176,9 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Checkbox("Enable PCF", &pcf);
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Post Processing", &post_process);
 
     ImGui::Separator();
     ImGui::Text("Smooth Path Along the Bezier Curve");
@@ -579,7 +583,38 @@ int main(int argc, char** argv)
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
 
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
+        const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
+        
         //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
+        
+        // Set Quad for post processing
+        GLuint quadVAO, quadVBO;
+        float quadVertices[] = {
+            // positions   // texCoords
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+            1.0f, -1.0f,  1.0f, 0.0f,
+
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            1.0f, -1.0f,  1.0f, 1.0f,
+            1.0f, 1.0f,  1.0f, 1.0f
+        };
+
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        
+        // Set up the vertex attributes
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        
+        glBindVertexArray(0);
+
+        
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
@@ -681,6 +716,27 @@ int main(int argc, char** argv)
         // Free the CPU memory after we copied the image to the GPU.
         stbi_image_free(pixels);
         stbi_image_free(light_pixels);
+
+        // Create color texture for post processing
+        // === Create Shadow Texture ===
+        GLuint texScreen;
+        glGenTextures(1, &texScreen);
+        glBindTexture(GL_TEXTURE_2D, texScreen);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Create postbuffer for post processing
+        GLuint postBuffer;
+        glGenFramebuffers(1, &postBuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texScreen, 0);
+        // Check if framebuffer is complete
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Error: Post-process framebuffer is not complete!" << std::endl;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         
         // Enable depth testing.
         glEnable(GL_DEPTH_TEST);
@@ -758,8 +814,12 @@ int main(int argc, char** argv)
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
             }
 
+            // If post process, load the render output to color texture
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+            }
             glClearDepth(1.0);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             auto render = [&](const Shader &shader) {
@@ -974,6 +1034,21 @@ int main(int argc, char** argv)
                 activeCamera->setLookAt(look_at); // Set the camera position back at its original place
             }
 
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
+                glClear(GL_COLOR_BUFFER_BIT);
+                glDisable(GL_DEPTH_TEST);
+
+                screenShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texScreen);
+                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
+
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glBindVertexArray(0);
+            }
+
             // Restore default depth test settings and disable blending.
             glDepthFunc(GL_LEQUAL);
             glDepthMask(GL_TRUE);
@@ -991,6 +1066,8 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
+        glDeleteVertexArrays(1, &quadVAO);
+        glDeleteBuffers(1, &quadVBO);
     } 
     #pragma endregion
     #pragma region Animation
