@@ -15,6 +15,8 @@ struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 texCoord; // Texture coordinate
+	glm::vec3 tangent;   // Add tangent
+    glm::vec3 bitangent; // Add bitangent
 
 	[[nodiscard]] constexpr bool operator==(const Vertex&) const noexcept = default;
 };
@@ -44,6 +46,7 @@ struct Mesh {
 
 [[nodiscard]] std::vector<Mesh> loadMesh(const std::filesystem::path& file, bool normalize = false);
 [[nodiscard]] Mesh mergeMeshes(std::span<const Mesh> meshes);
+[[nodiscard]] void calculateTangentsAndBitangents(Mesh& mesh);
 void meshFlipX(Mesh& mesh);
 void meshFlipY(Mesh& mesh);
 void meshFlipZ(Mesh& mesh);
