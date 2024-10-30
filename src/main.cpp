@@ -71,6 +71,8 @@ int specularMode = 0;
 
 bool transparency = true;
 
+bool applyMinimap = false;
+
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
 bool moveCamera = false;  
@@ -146,6 +148,9 @@ void imgui()
     ImGui::SliderFloat("Roughness", &shadingData.roughness, 0.0f, 1.0f);
     ImGui::SliderFloat("Metallic", &shadingData.metallic, 0.0f, 1.0f);
     ImGui::SliderFloat("Light Intensity", &shadingData.intensity, 1.0f, 10.0f);
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Mini Map", &applyMinimap);
 
     ImGui::Separator();
     ImGui::Combo("Diffuse Mode", &diffuseMode, diffuseModes.data(), (int)diffuseModes.size());
@@ -564,6 +569,9 @@ int main(int argc, char** argv)
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
         const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();
         const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
+
+        const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
+        const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
         
         const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
 
@@ -705,6 +713,25 @@ int main(int argc, char** argv)
         // Free the CPU memory after we copied the image to the GPU.
         stbi_image_free(pixels);
         stbi_image_free(light_pixels);
+
+        // Create a framebuffer for minimap
+        GLuint minimapFBO;
+        glGenFramebuffers(1, &minimapFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+
+        GLuint minimapTexture;
+        glGenTextures(1, &minimapTexture);
+        glBindTexture(GL_TEXTURE_2D, minimapTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Error: Minimap framebuffer is not complete!" << std::endl;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         
         // Enable depth testing.
         glEnable(GL_DEPTH_TEST);
@@ -803,7 +830,32 @@ int main(int argc, char** argv)
 
                 glBindVertexArray(0);
             };
-            
+
+            // Minimap Render Pass
+            glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+            glViewport(0, 0, WIDTH, HEIGHT);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);  
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glm::mat4 minimapView = topViewCameraPtr->viewMatrix();
+            glm::mat4 minimapProjection = topViewCameraPtr->projectionMatrix();
+            glm::mat4 minimapModel = glm::mat4(1.0f);
+            glm::mat4 minimapMVP = minimapProjection * minimapView * minimapModel;
+
+            minimapShader.bind();
+            glUniformMatrix4fv(minimapShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(minimapMVP));
+            glUniform3fv(minimapShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+            glUniform3fv(minimapShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+            glUniform3fv(minimapShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
+            glVertexAttribPointer(minimapShader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+            glVertexAttribPointer(minimapShader.getAttributeLocation("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+            glBindVertexArray(vao);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(0);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
             // Draw mesh into depth buffer but disable color writes.
             glDepthMask(GL_TRUE);
             glDepthFunc(GL_LEQUAL);
@@ -984,6 +1036,18 @@ int main(int argc, char** argv)
                 glUniform3fv(lightTextureShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(lightTextureShader);
+            }
+
+            if (applyMinimap) {
+                mapShader.bind();
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, minimapTexture);
+                glUniform1i(mapShader.getUniformLocation("texMinimap"), 3);
+                glUniformMatrix4fv(mapShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glUniform3fv(mapShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                render(mapShader);
             }
 
             // Implement smooth path along the Bezier Curve for light movement
