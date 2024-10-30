@@ -512,6 +512,7 @@ int main(int argc, char** argv)
     bool animated = config["mesh"]["animated"].value_or(false);
     auto mesh_path = std::string(RESOURCE_ROOT) + config["mesh"]["path"].value_or("resources/dragon.obj");
     std::cout << mesh_path << std::endl;
+    
 
     #pragma region Render
     if (!animated) {
@@ -588,7 +589,34 @@ int main(int argc, char** argv)
         //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
         
         // Set Quad for post processing
+        float quadVertices[] = {
+            // positions   // texCoords
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+            1.0f, -1.0f,  1.0f, 0.0f,
+
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            1.0f, -1.0f,  1.0f, 0.0f,
+            1.0f, 1.0f,  1.0f, 1.0f
+        };
+
+        GLuint quadVAO, quadVBO;
+        glGenBuffers(1, &quadVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        glGenVertexArrays(1, &quadVAO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
         
+        // Set up the vertex attributes
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        
+        glBindVertexArray(0);
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
@@ -620,58 +648,6 @@ int main(int argc, char** argv)
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
-        
-        GLuint quadVAO, quadVBO, quadIBO;
-        
-        // Mesh plane = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/plane.obj"));
-        // float quadVertices[] = {
-        //     // positions   // texCoords
-        //     -1.0f,  1.0f,  0.0f, 1.0f,
-        //     -1.0f, -1.0f,  0.0f, 0.0f,
-        //     1.0f, -1.0f,  1.0f, 0.0f,
-
-        //     -1.0f,  1.0f,  0.0f, 1.0f,
-        //     1.0f, -1.0f,  1.0f, 0.0f,
-        //     1.0f, 1.0f,  1.0f, 1.0f
-        // };
-
-        // glGenBuffers(1, &quadVBO);
-        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        // glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-        // glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        // glGenVertexArrays(1, &quadVAO);
-        // glBindVertexArray(quadVAO);
-        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        
-        // // Set up the vertex attributes
-        // glEnableVertexAttribArray(0);
-        // glEnableVertexAttribArray(1);
-        // glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        // glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-        
-        // glBindVertexArray(0);
-
-        // glGenBuffers(1, &quadVBO);
-        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        // glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(plane.vertices.size() * sizeof(Vertex)), plane.vertices.data(), GL_STATIC_DRAW);
-        // glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        // // Create index buffer object (IBO)
-        // glGenBuffers(1, &quadIBO);
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
-        // glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(plane.triangles.size() * sizeof(decltype(Mesh::triangles)::value_type)), plane.triangles.data(), GL_STATIC_DRAW);
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-        // glGenVertexArrays(1, &quadVAO);
-        // glBindVertexArray(quadVAO);
-        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
-
-        // glEnableVertexAttribArray(0);
-        // glEnableVertexAttribArray(1);
-
-        // glBindVertexArray(0);
 
         // Load image from disk to CPU memory.
         int width, height, sourceNumChannels; // Number of channels in source image. pixels will always be the requested number of channels (3).
@@ -742,7 +718,6 @@ int main(int argc, char** argv)
         stbi_image_free(light_pixels);
 
         // Create color texture for post processing
-        // === Create Shadow Texture ===
         GLuint texScreen;
         glGenTextures(1, &texScreen);
         glBindTexture(GL_TEXTURE_2D, texScreen);
@@ -756,11 +731,19 @@ int main(int argc, char** argv)
         glGenFramebuffers(1, &postBuffer);
         glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texScreen, 0);
+
+        //depth render buffer
+        GLuint depthRBO;
+        glGenRenderbuffers(1, &depthRBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WIDTH, HEIGHT);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        
         // Check if framebuffer is complete
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Error: Post-process framebuffer is not complete!" << std::endl;
         }
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         
         // Enable depth testing.
         glEnable(GL_DEPTH_TEST);
@@ -835,7 +818,11 @@ int main(int argc, char** argv)
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
                 // Unbind framebuffer
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                if (post_process) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+                } else {
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                }
             }
 
             glClearDepth(1.0);
@@ -856,7 +843,6 @@ int main(int argc, char** argv)
 
                 // Execute draw command.
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
-
                 glBindVertexArray(0);
             };
             
@@ -877,6 +863,8 @@ int main(int argc, char** argv)
             // If post process, load the render output to color texture
             if (post_process) {
                 glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
             }
 
             int applyTextureInt = applyTexture ? 1 : 0;
@@ -1002,9 +990,6 @@ int main(int argc, char** argv)
             }
 
             if (lights[selectedLightIndex].has_texture) {
-                // glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                // glClear(GL_COLOR_BUFFER_BIT);
-                
                 lightTextureShader.bind();
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, texLight);
@@ -1054,29 +1039,24 @@ int main(int argc, char** argv)
                 activeCamera->setLookAt(look_at); // Set the camera position back at its original place
             }
 
-            if (post_process) {
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glClear(GL_COLOR_BUFFER_BIT);
-                glDisable(GL_DEPTH_TEST);
-
-                screenShader.bind();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, texScreen);
-                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
-                // debugShader.bind();
-
-                glBindVertexArray(quadVAO);
-                // glVertexAttribPointer(screenShader.getAttributeLocation("pos"), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-                // glVertexAttribPointer(screenShader.getAttributeLocation("texCoords"), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-                glDrawArrays(GL_TRIANGLES, 0, 6);
-                // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
-                glBindVertexArray(0);
-            }
-
             // Restore default depth test settings and disable blending.
             glDepthFunc(GL_LEQUAL);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
+            
+            if (post_process) {
+                glDisable(GL_DEPTH_TEST);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, WIDTH, HEIGHT);
+                screenShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texScreen);
+                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
+
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glBindVertexArray(0);
+            }
 
             // Present result to the screen.
             window.swapBuffers();
