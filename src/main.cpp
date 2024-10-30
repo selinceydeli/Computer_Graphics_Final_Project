@@ -747,6 +747,23 @@ int main(int argc, char** argv)
 
             imgui();
 
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
+                glClear(GL_COLOR_BUFFER_BIT);
+                glDisable(GL_DEPTH_TEST);
+
+                screenShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texScreen);
+                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
+
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glBindVertexArray(0);
+            }
+            continue;
+
+
             // Set the active camera
             if (isTopViewCamera) {
                 activeCamera = topViewCameraPtr;
@@ -1032,21 +1049,6 @@ int main(int argc, char** argv)
                 activeCamera->setLookAt(newCameraPos);
             } else {
                 activeCamera->setLookAt(look_at); // Set the camera position back at its original place
-            }
-
-            if (post_process) {
-                glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
-                glClear(GL_COLOR_BUFFER_BIT);
-                glDisable(GL_DEPTH_TEST);
-
-                screenShader.bind();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, texScreen);
-                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
-
-                glBindVertexArray(quadVAO);
-                glDrawArrays(GL_TRIANGLES, 0, 6);
-                glBindVertexArray(0);
             }
 
             // Restore default depth test settings and disable blending.
