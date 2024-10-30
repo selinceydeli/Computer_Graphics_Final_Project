@@ -588,33 +588,8 @@ int main(int argc, char** argv)
         //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
         
         // Set Quad for post processing
-        GLuint quadVAO, quadVBO;
-        float quadVertices[] = {
-            // positions   // texCoords
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f,
-            1.0f, -1.0f,  1.0f, 0.0f,
-
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            1.0f, -1.0f,  1.0f, 1.0f,
-            1.0f, 1.0f,  1.0f, 1.0f
-        };
-
-        glGenVertexArrays(1, &quadVAO);
-        glGenBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
         
-        // Set up the vertex attributes
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-        
-        glBindVertexArray(0);
 
-        
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
@@ -644,10 +619,59 @@ int main(int argc, char** argv)
         // Tell OpenGL that we will be using vertex attributes 0 and 1.
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
-
-        // This is where we would set the attribute pointers, if apple supported it.
-
         glBindVertexArray(0);
+        
+        GLuint quadVAO, quadVBO, quadIBO;
+        
+        // Mesh plane = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/plane.obj"));
+        // float quadVertices[] = {
+        //     // positions   // texCoords
+        //     -1.0f,  1.0f,  0.0f, 1.0f,
+        //     -1.0f, -1.0f,  0.0f, 0.0f,
+        //     1.0f, -1.0f,  1.0f, 0.0f,
+
+        //     -1.0f,  1.0f,  0.0f, 1.0f,
+        //     1.0f, -1.0f,  1.0f, 0.0f,
+        //     1.0f, 1.0f,  1.0f, 1.0f
+        // };
+
+        // glGenBuffers(1, &quadVBO);
+        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        // glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // glGenVertexArrays(1, &quadVAO);
+        // glBindVertexArray(quadVAO);
+        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        
+        // // Set up the vertex attributes
+        // glEnableVertexAttribArray(0);
+        // glEnableVertexAttribArray(1);
+        // glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        // glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        
+        // glBindVertexArray(0);
+
+        // glGenBuffers(1, &quadVBO);
+        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        // glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(plane.vertices.size() * sizeof(Vertex)), plane.vertices.data(), GL_STATIC_DRAW);
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // // Create index buffer object (IBO)
+        // glGenBuffers(1, &quadIBO);
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
+        // glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(plane.triangles.size() * sizeof(decltype(Mesh::triangles)::value_type)), plane.triangles.data(), GL_STATIC_DRAW);
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        // glGenVertexArrays(1, &quadVAO);
+        // glBindVertexArray(quadVAO);
+        // glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
+
+        // glEnableVertexAttribArray(0);
+        // glEnableVertexAttribArray(1);
+
+        // glBindVertexArray(0);
 
         // Load image from disk to CPU memory.
         int width, height, sourceNumChannels; // Number of channels in source image. pixels will always be the requested number of channels (3).
@@ -747,23 +771,6 @@ int main(int argc, char** argv)
 
             imgui();
 
-            if (post_process) {
-                glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
-                glClear(GL_COLOR_BUFFER_BIT);
-                glDisable(GL_DEPTH_TEST);
-
-                screenShader.bind();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, texScreen);
-                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
-
-                glBindVertexArray(quadVAO);
-                glDrawArrays(GL_TRIANGLES, 0, 6);
-                glBindVertexArray(0);
-            }
-            continue;
-
-
             // Set the active camera
             if (isTopViewCamera) {
                 activeCamera = topViewCameraPtr;
@@ -831,10 +838,6 @@ int main(int argc, char** argv)
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
             }
 
-            // If post process, load the render output to color texture
-            if (post_process) {
-                glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
-            }
             glClearDepth(1.0);
             glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -871,13 +874,10 @@ int main(int argc, char** argv)
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
 
-            /*
-            std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting"};
-            std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
-            */
-
-            //for (const Light& light : lights) {
-                //renderedSomething = false;
+            // If post process, load the render output to color texture
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+            }
 
             int applyTextureInt = applyTexture ? 1 : 0;
             switch (diffuseMode) {
@@ -1002,6 +1002,9 @@ int main(int argc, char** argv)
             }
 
             if (lights[selectedLightIndex].has_texture) {
+                // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                // glClear(GL_COLOR_BUFFER_BIT);
+                
                 lightTextureShader.bind();
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, texLight);
@@ -1049,6 +1052,25 @@ int main(int argc, char** argv)
                 activeCamera->setLookAt(newCameraPos);
             } else {
                 activeCamera->setLookAt(look_at); // Set the camera position back at its original place
+            }
+
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glDisable(GL_DEPTH_TEST);
+
+                screenShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texScreen);
+                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
+                // debugShader.bind();
+
+                glBindVertexArray(quadVAO);
+                // glVertexAttribPointer(screenShader.getAttributeLocation("pos"), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+                // glVertexAttribPointer(screenShader.getAttributeLocation("texCoords"), 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+                glBindVertexArray(0);
             }
 
             // Restore default depth test settings and disable blending.
