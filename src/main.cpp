@@ -72,7 +72,14 @@ int specularMode = 0;
 bool transparency = true;
 
 bool applySmoothPath = false;     
-bool showBezierCurve = false;      
+bool showBezierCurve = false;
+bool moveCamera = false;  
+
+bool useOriginalCamera = true; 
+bool isTopViewCamera = false;
+bool isFrontViewCamera = false;
+bool isLeftViewCamera = false;
+bool isRightViewCamera = false;
 
 struct {
     // Diffuse (Lambert)
@@ -158,7 +165,40 @@ void imgui()
     ImGui::Separator();
     ImGui::Text("Smooth Path Along the Bezier Curve");
     ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
+    ImGui::Checkbox("Enable Camera Movement", &moveCamera);
     //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
+
+    const char* cameraViews[] = { "Original", "Top View", "Front View", "Left View", "Right View" };
+    static int selectedCameraIndex = 0;
+
+    ImGui::Separator();
+    ImGui::Text("Select Camera View");
+    if (ImGui::Combo("Camera View", &selectedCameraIndex, cameraViews, IM_ARRAYSIZE(cameraViews))) {
+        // Reset
+        useOriginalCamera = false;
+        isTopViewCamera = false;
+        isFrontViewCamera = false;
+        isLeftViewCamera = false;
+        isRightViewCamera = false;
+
+        switch (selectedCameraIndex) {
+            case 0:  // Original
+                useOriginalCamera = true;
+                break;
+            case 1:  // Top View
+                isTopViewCamera = true;
+                break;
+            case 2:  // Front View
+                isFrontViewCamera = true;
+                break;
+            case 3:  // Left View
+                isLeftViewCamera = true;
+                break;
+            case 4:  // Right View
+                isRightViewCamera = true;
+                break;
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("Lights");
@@ -255,8 +295,9 @@ std::vector<Mesh> loadMeshesFromDirectory(const std::string& dir_path) {
 }
 
 // Methods for implementing Smooth Paths with Bezier Curve 
-float t = 0.0f;                   // Time along the Bezier curve
-size_t currentCurve = 0;          // Current Bezier curve
+float t = 0.0;                          // Time along the Bezier curve for light
+float t_camera = 0.0;                   // Time along the Bezier curve for camera
+size_t currentCurve = 0;                // Current Bezier curve
 std::vector<glm::vec3> bezierCurvePath;
 
 glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) { 
@@ -272,7 +313,7 @@ glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, 
     return bezier;
 }
 
-// Implement 4 Consecutive Bezier Curves 
+// Implement 5 consecutive bezier curves for the light motion
 std::vector<std::vector<glm::vec3>> bezierControlPointsSets = {
     {
         glm::vec3(4.0f, 1.0f, 0.0f),  // p0
@@ -297,38 +338,50 @@ std::vector<std::vector<glm::vec3>> bezierControlPointsSets = {
         glm::vec3(2.0f, 2.0f, -4.0f),  
         glm::vec3(-2.0f, 1.5f, -4.0f), 
         glm::vec3(-4.0f, 1.0f, 0.0f)   
+    },
+    {
+        glm::vec3(-4.0f, 1.0f, 0.0f),   
+        glm::vec3(-2.0f, 1.5f, 2.0f),   
+        glm::vec3(2.0f, 1.5f, 2.0f),    
+        glm::vec3(4.0f, 1.0f, 0.0f)    
     }
 };
+ 
+// Bezier control points for the middle plane movement of the camera
+std::vector<glm::vec3> middlePlaneBezierCurve = 
+{
+    glm::vec3(0.0f, 0.0f, 5.0f),    
+    glm::vec3(0.0f, 1.0f, 2.0f),    
+    glm::vec3(0.0f, 1.0f, 0.0f),   
+    glm::vec3(0.0f, 0.0f, -1.0f)    
+};
 
-void moveAlongBezierCurves(float deltaTime) {
-    if (currentCurve >= bezierControlPointsSets.size()) return;  // Stop when all curves are completed
+void changeLightPosAlongBezierCurves(float timeChange) {
+    if (currentCurve < bezierControlPointsSets.size()) {
+        float speedFactor = 0.1;
+        t += timeChange * speedFactor;
+        if (t > 1.0) {
+            t = 0.0;
+            currentCurve += 1;
 
-    t += deltaTime * 0.1; // Slow the movement of the curve by multiplying with 0.1
-    if (t > 1.0f) {
-        t = 0.0f;  // Reset t for the next curve
-        currentCurve++;  // Move to the next curve
-        
-        // End movement after completing the last curve
-        if (currentCurve >= bezierControlPointsSets.size()) {
-            currentCurve = bezierControlPointsSets.size();  
-            return; 
+            if (currentCurve >= bezierControlPointsSets.size()) {
+                currentCurve = 0;  
+            }
         }
-    }
-
-    const auto& controlPoints = bezierControlPointsSets[currentCurve];
-    glm::vec3 newPosition = computeBezierPoint(t, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
-    lights[selectedLightIndex].position = newPosition;
+        const auto& controlP = bezierControlPointsSets[currentCurve];
+        lights[selectedLightIndex].position = computeBezierPoint(t, controlP[0], controlP[1], controlP[2], controlP[3]);
+    } 
+    return;
 }
 
-#pragma region Main
 // Program entry point. Everything starts here.
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
-    // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
     // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/normal_mapping.toml";
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/normal_mapping.toml";
 
     // parse initial scene config
     toml::table config;
@@ -414,8 +467,32 @@ int main(int argc, char** argv)
         specularMode = 3;
     }
 
-    Trackball trackball { &window, glm::radians(fovY) };
-    trackball.setCamera(look_at, rotations, dist);
+    // Define multiple views
+    Trackball mainCamera { &window, glm::radians(fovY) };
+    mainCamera.setCamera(look_at, rotations, dist);
+
+    Trackball topViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); 
+    topViewCamera.setCamera(look_at, topViewRotations, dist);
+
+    Trackball rightViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 rightViewRotations = glm::vec3(0.0f, glm::radians(90.0f), 0.0f);
+    rightViewCamera.setCamera(look_at, rightViewRotations, dist);
+
+    Trackball leftViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 leftViewRotations = glm::vec3(0.0f, glm::radians(-90.0f), 0.0f);
+    leftViewCamera.setCamera(look_at, leftViewRotations, dist);
+
+    Trackball frontViewCamera { &window, glm::radians(fovY) };
+    glm::vec3 frontViewRotations = glm::vec3(0.0f, glm::radians(0.0f), 0.0f);
+    frontViewCamera.setCamera(look_at, frontViewRotations, dist);
+
+    // Define pointers to switch between active cameras
+    Trackball* activeCamera = &mainCamera;
+    Trackball* topViewCameraPtr = &topViewCamera;
+    Trackball* rightViewCameraPtr = &rightViewCamera;
+    Trackball* leftViewCameraPtr = &leftViewCamera;
+    Trackball* frontViewCameraPtr = &frontViewCamera;
 
     // read mesh
     bool animated = config["mesh"]["animated"].value_or(false);
@@ -443,10 +520,10 @@ int main(int argc, char** argv)
             switch (key) {
             case GLFW_KEY_L: {
                 if (shiftPressed)
-                    lights.push_back(Light { trackball.position(), glm::vec3(1) });
+                    lights.push_back(Light { activeCamera->position(), glm::vec3(1) });
                 else
-                    lights[selectedLightIndex].position = trackball.position();
-                    lights[selectedLightIndex].direction = trackball.forward();
+                    lights[selectedLightIndex].position = activeCamera->position();
+                    lights[selectedLightIndex].direction = activeCamera->forward();
                 return;
             }
             case GLFW_KEY_N: {
@@ -638,6 +715,19 @@ int main(int argc, char** argv)
 
             imgui();
 
+            // Set the active camera
+            if (isTopViewCamera) {
+                activeCamera = topViewCameraPtr;
+            } else if (isRightViewCamera) {
+                activeCamera = rightViewCameraPtr;
+            } else if (isLeftViewCamera) {
+                activeCamera = leftViewCameraPtr;
+            } else if (isFrontViewCamera) {
+                activeCamera = frontViewCameraPtr;
+            } else {
+                activeCamera = &mainCamera; // Original camera view set by the toml file
+            }
+
             // Clear the framebuffer to black and depth to maximum value (ranges from [-1.0 to +1.0]).
             glViewport(0, 0, window.getWindowSize().x, window.getWindowSize().y);
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -659,11 +749,11 @@ int main(int argc, char** argv)
             glm::mat4 lightMVP = mainProjectionMatrix * lightViewMatrix;
 
             // Set model/view/projection matrix.
-            const glm::vec3 cameraPos = trackball.position();
+            const glm::vec3 cameraPos = activeCamera->position();
             const glm::mat4 model { 1.0f };
 
-            const glm::mat4 view = trackball.viewMatrix();
-            const glm::mat4 projection = trackball.projectionMatrix();
+            const glm::mat4 view = activeCamera->viewMatrix();
+            const glm::mat4 projection = activeCamera->projectionMatrix();
             const glm::mat4 mvp = projection * view * model;
 
             // === Step 1: Render the Shadow Map ===
@@ -896,13 +986,40 @@ int main(int argc, char** argv)
                 render(lightTextureShader);
             }
 
-            // Implement smooth path along the Bezier Curve
+            // Implement smooth path along the Bezier Curve for light movement
             if (applySmoothPath) {
                 float currentTime = glfwGetTime();
                 static float lastFrameTime = 0.0f;
                 float timeChange = currentTime - lastFrameTime;
                 lastFrameTime = currentTime;
-                moveAlongBezierCurves(timeChange);
+                changeLightPosAlongBezierCurves(timeChange);
+            }
+            
+            // Implement smooth path along the Bezier Curve for camera movement
+            if (moveCamera) {
+                float currentTime = glfwGetTime();
+                static float lastFrameTime = 0.0f;
+                float timeChange = currentTime - lastFrameTime;
+                lastFrameTime = currentTime;
+
+                float speedFactor = 0.1;
+                t_camera += timeChange * speedFactor;
+
+                if (t_camera > 1.0) {
+                    t_camera = 0.0;
+                }
+
+                const glm::vec3 newCameraPos = computeBezierPoint(
+                    t_camera, 
+                    middlePlaneBezierCurve[0], 
+                    middlePlaneBezierCurve[1], 
+                    middlePlaneBezierCurve[2], 
+                    middlePlaneBezierCurve[3]
+                );
+
+                activeCamera->setLookAt(newCameraPos);
+            } else {
+                activeCamera->setLookAt(look_at); // Set the camera position back at its original place
             }
 
             // Restore default depth test settings and disable blending.
@@ -948,10 +1065,10 @@ int main(int argc, char** argv)
             switch (key) {
             case GLFW_KEY_L: {
                 if (shiftPressed)
-                    lights.push_back(Light { trackball.position(), glm::vec3(1) });
+                    lights.push_back(Light { activeCamera->position(), glm::vec3(1) });
                 else
-                    lights[selectedLightIndex].position = trackball.position();
-                    lights[selectedLightIndex].direction = trackball.forward();
+                    lights[selectedLightIndex].position = activeCamera->position();
+                    lights[selectedLightIndex].direction = activeCamera->forward();
                 return;
             }
             case GLFW_KEY_N: {
@@ -1177,11 +1294,11 @@ int main(int argc, char** argv)
             glm::mat4 lightMVP = mainProjectionMatrix * lightViewMatrix;
 
             // Set model/view/projection matrix.
-            const glm::vec3 cameraPos = trackball.position();
+            const glm::vec3 cameraPos = activeCamera->position();
             const glm::mat4 model { 1.0f };
 
-            const glm::mat4 view = trackball.viewMatrix();
-            const glm::mat4 projection = trackball.projectionMatrix();
+            const glm::mat4 view = activeCamera->viewMatrix();
+            const glm::mat4 projection = activeCamera->projectionMatrix();
             const glm::mat4 mvp = projection * view * model;
 
             // === Step 1: Render the Shadow Map ===
