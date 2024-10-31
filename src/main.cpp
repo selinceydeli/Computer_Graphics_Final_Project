@@ -154,9 +154,6 @@ void imgui()
     ImGui::SliderFloat("Light Intensity", &shadingData.intensity, 1.0f, 10.0f);
 
     ImGui::Separator();
-    ImGui::Checkbox("Enable Mini Map", &applyMinimap);
-
-    ImGui::Separator();
     ImGui::Combo("Diffuse Mode", &diffuseMode, diffuseModes.data(), (int)diffuseModes.size());
 
     ImGui::Separator();
@@ -164,22 +161,16 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Texture to Light", &lights[selectedLightIndex].has_texture);
-
-    ImGui::Separator();
     ImGui::Checkbox("Enable Shadows", &shadows);
-
-    ImGui::Separator();
     ImGui::Checkbox("Enable PCF", &pcf);
+    
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Mini Map", &applyMinimap);
 
     ImGui::Separator();
-
     ImGui::Checkbox("Enable Post Processing", &post_process);
-
+    
     ImGui::Separator();
-    ImGui::Text("Smooth Path Along the Bezier Curve");
-    ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
-    ImGui::Checkbox("Enable Camera Movement", &moveCamera);
-
     ImGui::Text("Light Movement Along the Bezier Curve");
     ImGui::Checkbox("Enable Smooth Path for Light", &applySmoothPath);
     ImGui::Checkbox("Enable Constant Speed", &isConstantSpeedAlongBezier);
@@ -470,7 +461,7 @@ void moveLightAlongEvenlySpacedPath(float timeChange) {
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
-    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
+    std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/final.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
     // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/normal_mapping.toml";
@@ -667,16 +658,12 @@ int main(int argc, char** argv)
         const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
         const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
         
-        const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
-
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-        
-        //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
-        
+                
         // Set Quad for post processing
         float quadVertices[] = {
             // positions   // texCoords
@@ -1011,7 +998,11 @@ int main(int argc, char** argv)
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
             glBindVertexArray(0);
 
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+            } else {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
 
             // Draw mesh into depth buffer but disable color writes.
             glDepthMask(GL_TRUE);
