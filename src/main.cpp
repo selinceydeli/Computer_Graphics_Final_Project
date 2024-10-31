@@ -33,6 +33,8 @@ DISABLE_WARNINGS_POP()
 #include <filesystem> 
 #include <chrono>     
 #include <thread>
+#include <glm/glm.hpp>
+#include <cmath>
 
 std::vector<Mesh> animationMeshes; 
 std::vector<GLuint> vaos, vbos, ibos;
@@ -74,6 +76,7 @@ bool transparency = true;
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
 bool moveCamera = false;  
+bool isConstantSpeedAlongBezier = false;
 
 bool useOriginalCamera = true; 
 bool isTopViewCamera = false;
@@ -163,9 +166,13 @@ void imgui()
     ImGui::Checkbox("Enable PCF", &pcf);
 
     ImGui::Separator();
-    ImGui::Text("Smooth Path Along the Bezier Curve");
-    ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
-    ImGui::Checkbox("Enable Camera Movement", &moveCamera);
+    ImGui::Text("Light Movement Along the Bezier Curve");
+    ImGui::Checkbox("Enable Smooth Path for Light", &applySmoothPath);
+    ImGui::Checkbox("Enable Constant Speed", &isConstantSpeedAlongBezier);
+
+    ImGui::Separator();
+    ImGui::Text("Camera Movement Along the Bezier Curve");
+    ImGui::Checkbox("Enable Smooth Path for Camera", &moveCamera);
     //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
 
     const char* cameraViews[] = { "Original", "Top View", "Front View", "Left View", "Right View" };
@@ -299,6 +306,7 @@ float t = 0.0;                          // Time along the Bezier curve for light
 float t_camera = 0.0;                   // Time along the Bezier curve for camera
 size_t currentCurve = 0;                // Current Bezier curve
 std::vector<glm::vec3> bezierCurvePath;
+std::vector<glm::vec3> bezierCurvePathEven;
 
 glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) { 
     float factor = (1.0 - t);
@@ -372,6 +380,75 @@ void changeLightPosAlongBezierCurves(float timeChange) {
         lights[selectedLightIndex].position = computeBezierPoint(t, controlP[0], controlP[1], controlP[2], controlP[3]);
     } 
     return;
+}
+
+// Methods for calculating constant speed along a Bezier Curve
+std::vector<glm::vec3> computeEvenSpacedPoints(const std::vector<glm::vec3>& controlPoints, float spacing, float resolution = 1.0f) {
+    std::vector<glm::vec3> pointsWithEvenSpace;
+    pointsWithEvenSpace.push_back(controlPoints[0]);
+    glm::vec3 prevPoint = controlPoints[0];
+    float dist = 0.0;
+
+    float totalDistAlongCurve = glm::distance(controlPoints[0], controlPoints[1]) + 
+                                glm::distance(controlPoints[1], controlPoints[2]) + 
+                                glm::distance(controlPoints[2], controlPoints[3]);
+    float estimatedDist = glm::distance(controlPoints[0], controlPoints[3]) + totalDistAlongCurve / 2.0f;
+
+    float time = 0.0;
+    while (time <= 1.0) {
+        time += 1.0 / std::ceil(estimatedDist * resolution * 10);        
+        glm::vec3 currentPoint = computeBezierPoint(time, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
+        dist += glm::distance(prevPoint, currentPoint);
+        
+        while (dist >= spacing) {
+            float overshootDistance = dist - spacing;
+            glm::vec3 newPoint = currentPoint + (prevPoint - currentPoint) * (overshootDistance / glm::distance(prevPoint, currentPoint));
+            pointsWithEvenSpace.push_back(newPoint);
+            dist = overshootDistance;
+            prevPoint = newPoint;
+        }
+
+        prevPoint = currentPoint;
+    }
+    return pointsWithEvenSpace;
+}
+
+void initializeEvenSpacedCurved(float spacing, float resolution) {
+    bezierCurvePathEven.clear();  
+    for (const auto& controlPoints : bezierControlPointsSets) {
+        std::vector<glm::vec3> segmentPoints = computeEvenSpacedPoints(controlPoints, spacing, resolution);
+        bezierCurvePathEven.insert(bezierCurvePathEven.end(), segmentPoints.begin(), segmentPoints.end());
+    }
+}
+
+// Interpolation for a smoother path
+glm::vec3 interpolate(const glm::vec3& start, const glm::vec3& end, float t) {
+    return (1.0f - t) * start + t * end;
+}
+
+void moveLightAlongEvenlySpacedPath(float timeChange) {
+    static size_t idx = 0;
+    static float accumulatedDist = 0.0f;
+    float speed = 0.5f;  
+
+    if (bezierCurvePathEven.empty()) return;
+    accumulatedDist += timeChange * speed;
+
+    while (accumulatedDist > 0.0f && idx < bezierCurvePathEven.size() - 1) {
+        glm::vec3 firstPoint = bezierCurvePathEven[idx];
+        glm::vec3 secondPoint = bezierCurvePathEven[idx+1];
+        if (accumulatedDist >= glm::distance(firstPoint, secondPoint)) {
+            accumulatedDist -= glm::distance(firstPoint, secondPoint);
+            idx++;
+        } else {
+            float time = accumulatedDist / glm::distance(firstPoint, secondPoint);
+            lights[selectedLightIndex].position = interpolate(firstPoint, secondPoint, time);
+            return; 
+        }
+    }
+
+    if (idx >= bezierCurvePathEven.size() - 1) idx = 0;
+    lights[selectedLightIndex].position = bezierCurvePathEven[idx];
 }
 
 // Program entry point. Everything starts here.
@@ -499,6 +576,11 @@ int main(int argc, char** argv)
     auto mesh_path = std::string(RESOURCE_ROOT) + config["mesh"]["path"].value_or("resources/dragon.obj");
     std::cout << mesh_path << std::endl;
 
+    // Initialize the Bezier Curve for constant speed movement
+    float spacing = 0.1f;      
+    float resolution = 1.0f;   
+    initializeEvenSpacedCurved(spacing, resolution);
+
     #pragma region Render
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
@@ -562,16 +644,15 @@ int main(int argc, char** argv)
         const Shader toonDiffuseShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_diffuse_frag.glsl").build();
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
-        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();
+        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
+
         const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
-        
         const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
 
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
-
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
-        //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
+
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
@@ -992,9 +1073,11 @@ int main(int argc, char** argv)
                 static float lastFrameTime = 0.0f;
                 float timeChange = currentTime - lastFrameTime;
                 lastFrameTime = currentTime;
-                changeLightPosAlongBezierCurves(timeChange);
+
+                if (isConstantSpeedAlongBezier) moveLightAlongEvenlySpacedPath(timeChange);
+                else changeLightPosAlongBezierCurves(timeChange);
             }
-            
+
             // Implement smooth path along the Bezier Curve for camera movement
             if (moveCamera) {
                 float currentTime = glfwGetTime();
@@ -1108,13 +1191,9 @@ int main(int argc, char** argv)
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
 
-        const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
-
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
-
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
-        //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
