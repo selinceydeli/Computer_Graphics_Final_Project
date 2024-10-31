@@ -33,6 +33,8 @@ DISABLE_WARNINGS_POP()
 #include <filesystem> 
 #include <chrono>     
 #include <thread>
+#include <glm/glm.hpp>
+#include <cmath>
 
 std::vector<Mesh> animationMeshes; 
 std::vector<GLuint> vaos, vbos, ibos;
@@ -58,7 +60,7 @@ bool toonLightingSpecular = false;
 bool toonxLighting = false;
 */
 
-std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading"};
+std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"};
 std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
 
 std::array samplingModes {"Single Sample", "PCF"};
@@ -72,9 +74,12 @@ int specularMode = 0;
 
 bool transparency = true;
 
+bool applyMinimap = false;
+
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
 bool moveCamera = false;  
+bool isConstantSpeedAlongBezier = false;
 
 bool useOriginalCamera = true; 
 bool isTopViewCamera = false;
@@ -124,6 +129,7 @@ void resetLights()
     selectedLightIndex = 0;
 }
 
+#pragma region GUI
 void imgui()
 {
     // Define UI here
@@ -147,20 +153,8 @@ void imgui()
     ImGui::SliderFloat("Metallic", &shadingData.metallic, 0.0f, 1.0f);
     ImGui::SliderFloat("Light Intensity", &shadingData.intensity, 1.0f, 10.0f);
 
-    /*
     ImGui::Separator();
-    ImGui::Text("Diffuse Model");
-    ImGui::Checkbox("0: Debug", &debug);
-    ImGui::Checkbox("1: Diffuse Lighting", &diffuseLighting);
-    ImGui::Checkbox("2: Toon Lighting Diffuse", &toonLightingDiffuse);
-    ImGui::Checkbox("3: Toon X Lighting", &toonxLighting);
-
-    ImGui::Separator();
-    ImGui::Text("Specular Model");
-    ImGui::Checkbox("4: Phong Specular Lighting", &phongSpecularLighting);
-    ImGui::Checkbox("5: Blinn-Phong Specular Lighting", &blinnPhongSpecularLighting);
-    ImGui::Checkbox("6: Toon Lighting Specular", &toonLightingSpecular);
-    */
+    ImGui::Checkbox("Enable Mini Map", &applyMinimap);
 
     ImGui::Separator();
     ImGui::Combo("Diffuse Mode", &diffuseMode, diffuseModes.data(), (int)diffuseModes.size());
@@ -178,12 +172,22 @@ void imgui()
     ImGui::Checkbox("Enable PCF", &pcf);
 
     ImGui::Separator();
+
     ImGui::Checkbox("Enable Post Processing", &post_process);
 
     ImGui::Separator();
     ImGui::Text("Smooth Path Along the Bezier Curve");
     ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
     ImGui::Checkbox("Enable Camera Movement", &moveCamera);
+
+    ImGui::Text("Light Movement Along the Bezier Curve");
+    ImGui::Checkbox("Enable Smooth Path for Light", &applySmoothPath);
+    ImGui::Checkbox("Enable Constant Speed", &isConstantSpeedAlongBezier);
+
+    ImGui::Separator();
+    ImGui::Text("Camera Movement Along the Bezier Curve");
+    ImGui::Checkbox("Enable Smooth Path for Camera", &moveCamera);
+
     //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
 
     const char* cameraViews[] = { "Original", "Top View", "Front View", "Left View", "Right View" };
@@ -278,6 +282,7 @@ void imgui()
     ImGui::End();
     ImGui::Render();
 }
+#pragma endregion
 
 std::optional<glm::vec3> tomlArrayToVec3(const toml::array* array)
 {
@@ -316,6 +321,7 @@ float t = 0.0;                          // Time along the Bezier curve for light
 float t_camera = 0.0;                   // Time along the Bezier curve for camera
 size_t currentCurve = 0;                // Current Bezier curve
 std::vector<glm::vec3> bezierCurvePath;
+std::vector<glm::vec3> bezierCurvePathEven;
 
 glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) { 
     float factor = (1.0 - t);
@@ -391,13 +397,83 @@ void changeLightPosAlongBezierCurves(float timeChange) {
     return;
 }
 
+// Methods for calculating constant speed along a Bezier Curve
+std::vector<glm::vec3> computeEvenSpacedPoints(const std::vector<glm::vec3>& controlPoints, float spacing, float resolution = 1.0f) {
+    std::vector<glm::vec3> pointsWithEvenSpace;
+    pointsWithEvenSpace.push_back(controlPoints[0]);
+    glm::vec3 prevPoint = controlPoints[0];
+    float dist = 0.0;
+
+    float totalDistAlongCurve = glm::distance(controlPoints[0], controlPoints[1]) + 
+                                glm::distance(controlPoints[1], controlPoints[2]) + 
+                                glm::distance(controlPoints[2], controlPoints[3]);
+    float estimatedDist = glm::distance(controlPoints[0], controlPoints[3]) + totalDistAlongCurve / 2.0f;
+
+    float time = 0.0;
+    while (time <= 1.0) {
+        time += 1.0 / std::ceil(estimatedDist * resolution * 10);        
+        glm::vec3 currentPoint = computeBezierPoint(time, controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3]);
+        dist += glm::distance(prevPoint, currentPoint);
+        
+        while (dist >= spacing) {
+            float overshootDistance = dist - spacing;
+            glm::vec3 newPoint = currentPoint + (prevPoint - currentPoint) * (overshootDistance / glm::distance(prevPoint, currentPoint));
+            pointsWithEvenSpace.push_back(newPoint);
+            dist = overshootDistance;
+            prevPoint = newPoint;
+        }
+
+        prevPoint = currentPoint;
+    }
+    return pointsWithEvenSpace;
+}
+
+void initializeEvenSpacedCurved(float spacing, float resolution) {
+    bezierCurvePathEven.clear();  
+    for (const auto& controlPoints : bezierControlPointsSets) {
+        std::vector<glm::vec3> segmentPoints = computeEvenSpacedPoints(controlPoints, spacing, resolution);
+        bezierCurvePathEven.insert(bezierCurvePathEven.end(), segmentPoints.begin(), segmentPoints.end());
+    }
+}
+
+// Interpolation for a smoother path
+glm::vec3 interpolate(const glm::vec3& start, const glm::vec3& end, float t) {
+    return (1.0f - t) * start + t * end;
+}
+
+void moveLightAlongEvenlySpacedPath(float timeChange) {
+    static size_t idx = 0;
+    static float accumulatedDist = 0.0f;
+    float speed = 0.5f;  
+
+    if (bezierCurvePathEven.empty()) return;
+    accumulatedDist += timeChange * speed;
+
+    while (accumulatedDist > 0.0f && idx < bezierCurvePathEven.size() - 1) {
+        glm::vec3 firstPoint = bezierCurvePathEven[idx];
+        glm::vec3 secondPoint = bezierCurvePathEven[idx+1];
+        if (accumulatedDist >= glm::distance(firstPoint, secondPoint)) {
+            accumulatedDist -= glm::distance(firstPoint, secondPoint);
+            idx++;
+        } else {
+            float time = accumulatedDist / glm::distance(firstPoint, secondPoint);
+            lights[selectedLightIndex].position = interpolate(firstPoint, secondPoint, time);
+            return; 
+        }
+    }
+
+    if (idx >= bezierCurvePathEven.size() - 1) idx = 0;
+    lights[selectedLightIndex].position = bezierCurvePathEven[idx];
+}
+
 // Program entry point. Everything starts here.
 int main(int argc, char** argv)
 {
     // read toml file from argument line (otherwise use default file)
     std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
-    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
+    // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/normal_mapping.toml";
 
     // parse initial scene config
     toml::table config;
@@ -467,7 +543,9 @@ int main(int argc, char** argv)
         diffuseMode = 3;
     } else if (diffuse_model == "pbr") {
         diffuseMode = 4;
-    } else {
+    } else if (diffuse_model == "normal-mapping"){
+        diffuseMode = 5;
+    } else{
         diffuseMode = 0;
     }
 
@@ -514,12 +592,18 @@ int main(int argc, char** argv)
     std::cout << mesh_path << std::endl;
     
 
+    // Initialize the Bezier Curve for constant speed movement
+    float spacing = 0.1f;      
+    float resolution = 1.0f;   
+    initializeEvenSpacedCurved(spacing, resolution);
+
     #pragma region Render
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
         //const Mesh mesh = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/scene.obj"));
-        const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
+        Mesh mesh = mergeMeshes(loadMesh(mesh_path));
+        calculateTangentsAndBitangents(mesh);
 
         window.registerKeyCallback([&](int key, int /* scancode */, int action, int /* mods */) {
             if (key == '\\' && action == GLFW_PRESS) {
@@ -576,14 +660,19 @@ int main(int argc, char** argv)
         const Shader toonDiffuseShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_diffuse_frag.glsl").build();
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
-        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();
+        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
+
+        const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
+
+        const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
+        const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
         
         const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
 
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
-
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
+
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
         
         //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
@@ -688,6 +777,38 @@ int main(int argc, char** argv)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
+        // Create Normal Texture
+        // Normal Texture
+        int normalWidth, normalHeight, normalChannels;
+        stbi_uc* normal_pixels = stbi_load(RESOURCE_ROOT "resources/normal_map1.png", &normalWidth, &normalHeight, &normalChannels, STBI_rgb);
+
+        GLuint texNormal;
+        glGenTextures(1, &texNormal);
+        glBindTexture(GL_TEXTURE_2D, texNormal);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, normalWidth, normalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, normal_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(normal_pixels);
+
+        // Material Texture
+        int matWidth, matHeight, matChannels;
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/wave.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+
+        GLuint texMat;
+        glGenTextures(1, &texMat);
+        glBindTexture(GL_TEXTURE_2D, texMat);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, matWidth, matHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, mat_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(mat_pixels);
+
+
         // === Create Shadow Texture ===
         GLuint texShadow;
         const int SHADOWTEX_WIDTH = 1024;
@@ -717,6 +838,7 @@ int main(int argc, char** argv)
         stbi_image_free(pixels);
         stbi_image_free(light_pixels);
 
+
         // Create color texture for post processing
         GLuint texScreen;
         glGenTextures(1, &texScreen);
@@ -744,6 +866,26 @@ int main(int argc, char** argv)
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Error: Post-process framebuffer is not complete!" << std::endl;
         }
+
+        // Create a framebuffer for minimap
+        GLuint minimapFBO;
+        glGenFramebuffers(1, &minimapFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+
+        GLuint minimapTexture;
+        glGenTextures(1, &minimapTexture);
+        glBindTexture(GL_TEXTURE_2D, minimapTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Error: Minimap framebuffer is not complete!" << std::endl;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         
         // Enable depth testing.
         glEnable(GL_DEPTH_TEST);
@@ -845,7 +987,32 @@ int main(int argc, char** argv)
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
                 glBindVertexArray(0);
             };
-            
+
+            // Minimap Render Pass
+            glBindFramebuffer(GL_FRAMEBUFFER, minimapFBO);
+            glViewport(0, 0, WIDTH, HEIGHT);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);  
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glm::mat4 minimapView = topViewCameraPtr->viewMatrix();
+            glm::mat4 minimapProjection = topViewCameraPtr->projectionMatrix();
+            glm::mat4 minimapModel = glm::mat4(1.0f);
+            glm::mat4 minimapMVP = minimapProjection * minimapView * minimapModel;
+
+            minimapShader.bind();
+            glUniformMatrix4fv(minimapShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(minimapMVP));
+            glUniform3fv(minimapShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+            glUniform3fv(minimapShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+            glUniform3fv(minimapShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
+            glVertexAttribPointer(minimapShader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+            glVertexAttribPointer(minimapShader.getAttributeLocation("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+            glBindVertexArray(vao);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(0);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
             // Draw mesh into depth buffer but disable color writes.
             glDepthMask(GL_TRUE);
             glDepthFunc(GL_LEQUAL);
@@ -859,6 +1026,7 @@ int main(int argc, char** argv)
             glDepthFunc(GL_EQUAL); // Only draw a pixel if it's depth matches the value stored in the depth buffer.
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+
 
             // If post process, load the render output to color texture
             if (post_process) {
@@ -921,7 +1089,39 @@ int main(int argc, char** argv)
                     glUniform1f(pbrShader.getUniformLocation("intensity"), shadingData.intensity);
                     render(pbrShader);
                     break;
+                case 5: // normal mapping
+                    normalShader.bind();
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, texNormal);
+                    glUniform1i(normalShader.getUniformLocation("texNormal"), 0);
+                    glActiveTexture(GL_TEXTURE1);
+                    // Normal Mapping Texture
+                    glBindTexture(GL_TEXTURE_2D, texToon);
+                    glUniform1i(normalShader.getUniformLocation("texMat"), 1);
+                    glUniform3fv(normalShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                    // glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
+                    // glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
+                    // glUniform3fv(normalShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("model"), 1, GL_FALSE, glm::value_ptr(model));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("proj"), 1, GL_FALSE, glm::value_ptr(projection));
+                    // Bind vertex data.
+                    glBindVertexArray(vao);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+                    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+                    // Enable the tangent and bitangent attributes
+                    glEnableVertexAttribArray(2);
+                    glEnableVertexAttribArray(3);
+                    glEnableVertexAttribArray(4);
+                        
+                    // Execute draw command.
+                    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
+                    glBindVertexArray(0);
+                    break;
                 default: // Debug mode as default
                     debugShader.bind();
                     render(debugShader);
@@ -1003,15 +1203,29 @@ int main(int argc, char** argv)
                 render(lightTextureShader);
             }
 
+            if (applyMinimap) {
+                mapShader.bind();
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, minimapTexture);
+                glUniform1i(mapShader.getUniformLocation("texMinimap"), 3);
+                glUniformMatrix4fv(mapShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glUniform3fv(mapShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                render(mapShader);
+            }
+
             // Implement smooth path along the Bezier Curve for light movement
             if (applySmoothPath) {
                 float currentTime = glfwGetTime();
                 static float lastFrameTime = 0.0f;
                 float timeChange = currentTime - lastFrameTime;
                 lastFrameTime = currentTime;
-                changeLightPosAlongBezierCurves(timeChange);
+
+                if (isConstantSpeedAlongBezier) moveLightAlongEvenlySpacedPath(timeChange);
+                else changeLightPosAlongBezierCurves(timeChange);
             }
-            
+
             // Implement smooth path along the Bezier Curve for camera movement
             if (moveCamera) {
                 float currentTime = glfwGetTime();
@@ -1066,6 +1280,7 @@ int main(int argc, char** argv)
         glDeleteFramebuffers(1, &framebuffer);
         glDeleteTextures(1, &texShadow);
         glDeleteTextures(1, &texLight);
+        glDeleteTextures(1, &texNormal);
         glDeleteTextures(1, &texToon);
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
@@ -1140,13 +1355,9 @@ int main(int argc, char** argv)
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
 
-        const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
-
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
-
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
-        //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
@@ -1548,3 +1759,4 @@ int main(int argc, char** argv)
     
     return 0;
 }
+#pragma endregion

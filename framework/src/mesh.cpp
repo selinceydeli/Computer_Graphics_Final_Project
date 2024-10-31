@@ -17,6 +17,8 @@ DISABLE_WARNINGS_POP()
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <fstream>
+#include <cmath>
 
 static void centerAndScaleToUnitMesh(std::span<Mesh> meshes);
 
@@ -212,5 +214,87 @@ void meshFlipZ(Mesh& mesh)
     for (auto& v : mesh.vertices) {
         v.position.z = -v.position.z;
         v.normal.z = -v.normal.z;
+    }
+}
+
+
+void calculateTangentsAndBitangents(Mesh& mesh) {
+    std::ofstream outputFile;
+    bool debug = true;
+    std::string output_path = "/Users/lemon/Documents/TUD/Courses/CGA/computer-graphics-final-project/logs/tangent.txt";
+
+    if (debug) {
+        outputFile.open(output_path);
+        if (!outputFile.is_open()) {
+            std::cerr << "Failed to open output file!" << std::endl;
+            return;
+        }
+    }
+
+    for (size_t i = 0; i < mesh.triangles.size(); i++) {
+        unsigned int i0 = mesh.triangles[i].x;
+        unsigned int i1 = mesh.triangles[i].y;
+        unsigned int i2 = mesh.triangles[i].z;
+
+        Vertex& v0 = mesh.vertices[i0];
+        Vertex& v1 = mesh.vertices[i1];
+        Vertex& v2 = mesh.vertices[i2];
+
+        glm::vec3 edge1 = v1.position - v0.position;
+        glm::vec3 edge2 = v2.position - v0.position;
+
+        glm::vec2 deltaUV1 = v1.texCoord - v0.texCoord;
+        glm::vec2 deltaUV2 = v2.texCoord - v0.texCoord;
+
+        float denominator = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+
+        glm::vec3 tangent, bitangent;
+        bool useDefault = false;
+
+        if (fabs(denominator) < 1e-6) {
+            tangent = glm::vec3(1.0f, 0.0f, 0.0f); 
+            bitangent = glm::vec3(0.0f, 1.0f, 0.0f); 
+            useDefault = true;
+
+            if (debug) {
+                outputFile << "Warning: Degenerate UV coordinates detected for triangle " << i << ". Using default tangent/bitangent.\n";
+            }
+        } else {
+            float f = 1.0f / denominator;
+
+            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+            bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        }
+        //calculate for vextex
+        v0.tangent += tangent;
+        v1.tangent += tangent;
+        v2.tangent += tangent;
+
+        v0.bitangent += bitangent;
+        v1.bitangent += bitangent;
+        v2.bitangent += bitangent;
+    }
+
+    for (size_t i = 0; i < mesh.vertices.size(); i++) {
+        Vertex& vertex = mesh.vertices[i];
+        // vertex.tangent = glm::normalize(vertex.tangent - vertex.normal * glm::dot(vertex.normal, vertex.tangent));
+        // vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
+        vertex.tangent = glm::normalize(vertex.tangent);
+        vertex.bitangent = glm::normalize(vertex.bitangent);
+
+        if (debug) {
+            outputFile << "Vertex " << i << ":\n";
+            outputFile << "  Final Tangent: " << vertex.tangent.x << ", " << vertex.tangent.y << ", " << vertex.tangent.z << "\n";
+            outputFile << "  Final Bitangent: " << vertex.bitangent.x << ", " << vertex.bitangent.y << ", " << vertex.bitangent.z << "\n";
+        }
+    }
+
+    if (debug) {
+        outputFile.close();
     }
 }
