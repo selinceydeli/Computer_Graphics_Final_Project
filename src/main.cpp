@@ -47,6 +47,7 @@ size_t currentMeshIndex = 0;
 const int WIDTH = 1200;
 const int HEIGHT = 800;
 
+bool post_process = false;
 bool show_imgui = true;
 
 /*
@@ -171,6 +172,14 @@ void imgui()
     ImGui::Checkbox("Enable PCF", &pcf);
 
     ImGui::Separator();
+
+    ImGui::Checkbox("Enable Post Processing", &post_process);
+
+    ImGui::Separator();
+    ImGui::Text("Smooth Path Along the Bezier Curve");
+    ImGui::Checkbox("Enable Light Movement", &applySmoothPath);
+    ImGui::Checkbox("Enable Camera Movement", &moveCamera);
+
     ImGui::Text("Light Movement Along the Bezier Curve");
     ImGui::Checkbox("Enable Smooth Path for Light", &applySmoothPath);
     ImGui::Checkbox("Enable Constant Speed", &isConstantSpeedAlongBezier);
@@ -178,6 +187,7 @@ void imgui()
     ImGui::Separator();
     ImGui::Text("Camera Movement Along the Bezier Curve");
     ImGui::Checkbox("Enable Smooth Path for Camera", &moveCamera);
+
     //ImGui::Checkbox("Show Bezier Path", &showBezierCurve);
 
     const char* cameraViews[] = { "Original", "Top View", "Front View", "Left View", "Right View" };
@@ -580,6 +590,7 @@ int main(int argc, char** argv)
     bool animated = config["mesh"]["animated"].value_or(false);
     auto mesh_path = std::string(RESOURCE_ROOT) + config["mesh"]["path"].value_or("resources/dragon.obj");
     std::cout << mesh_path << std::endl;
+    
 
     // Initialize the Bezier Curve for constant speed movement
     float spacing = 0.1f;      
@@ -662,6 +673,40 @@ int main(int argc, char** argv)
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
 
+        const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
+        
+        //const Shader spotlightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/spotlight_frag.glsl").build();
+        
+        // Set Quad for post processing
+        float quadVertices[] = {
+            // positions   // texCoords
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+            1.0f, -1.0f,  1.0f, 0.0f,
+
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            1.0f, -1.0f,  1.0f, 0.0f,
+            1.0f, 1.0f,  1.0f, 1.0f
+        };
+
+        GLuint quadVAO, quadVBO;
+        glGenBuffers(1, &quadVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        glGenVertexArrays(1, &quadVAO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        
+        // Set up the vertex attributes
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        
+        glBindVertexArray(0);
+
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
@@ -691,9 +736,6 @@ int main(int argc, char** argv)
         // Tell OpenGL that we will be using vertex attributes 0 and 1.
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
-
-        // This is where we would set the attribute pointers, if apple supported it.
-
         glBindVertexArray(0);
 
         // Load image from disk to CPU memory.
@@ -796,6 +838,35 @@ int main(int argc, char** argv)
         stbi_image_free(pixels);
         stbi_image_free(light_pixels);
 
+
+        // Create color texture for post processing
+        GLuint texScreen;
+        glGenTextures(1, &texScreen);
+        glBindTexture(GL_TEXTURE_2D, texScreen);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Create postbuffer for post processing
+        GLuint postBuffer;
+        glGenFramebuffers(1, &postBuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texScreen, 0);
+
+        //depth render buffer
+        GLuint depthRBO;
+        glGenRenderbuffers(1, &depthRBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, WIDTH, HEIGHT);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        
+        // Check if framebuffer is complete
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Error: Post-process framebuffer is not complete!" << std::endl;
+        }
+
         // Create a framebuffer for minimap
         GLuint minimapFBO;
         glGenFramebuffers(1, &minimapFBO);
@@ -814,6 +885,7 @@ int main(int argc, char** argv)
             std::cerr << "Error: Minimap framebuffer is not complete!" << std::endl;
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         
         // Enable depth testing.
         glEnable(GL_DEPTH_TEST);
@@ -888,11 +960,15 @@ int main(int argc, char** argv)
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
                 // Unbind framebuffer
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                if (post_process) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+                } else {
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                }
             }
 
             glClearDepth(1.0);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             auto render = [&](const Shader &shader) {
@@ -909,7 +985,6 @@ int main(int argc, char** argv)
 
                 // Execute draw command.
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
-
                 glBindVertexArray(0);
             };
 
@@ -951,6 +1026,14 @@ int main(int argc, char** argv)
             glDepthFunc(GL_EQUAL); // Only draw a pixel if it's depth matches the value stored in the depth buffer.
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+
+
+            // If post process, load the render output to color texture
+            if (post_process) {
+                glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
+            }
 
             int applyTextureInt = applyTexture ? 1 : 0;
             switch (diffuseMode) {
@@ -1174,6 +1257,20 @@ int main(int argc, char** argv)
             glDepthFunc(GL_LEQUAL);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
+            
+            if (post_process) {
+                glDisable(GL_DEPTH_TEST);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, WIDTH, HEIGHT);
+                screenShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texScreen);
+                glUniform1i(screenShader.getUniformLocation("screenTexture"), 0);
+
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glBindVertexArray(0);
+            }
 
             // Present result to the screen.
             window.swapBuffers();
@@ -1188,6 +1285,8 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
+        glDeleteVertexArrays(1, &quadVAO);
+        glDeleteBuffers(1, &quadVBO);
     } 
     #pragma endregion
     #pragma region Animation
