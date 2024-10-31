@@ -59,7 +59,7 @@ bool toonLightingSpecular = false;
 bool toonxLighting = false;
 */
 
-std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading"};
+std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"};
 std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
 
 std::array samplingModes {"Single Sample", "PCF"};
@@ -126,6 +126,7 @@ void resetLights()
     selectedLightIndex = 0;
 }
 
+#pragma region GUI
 void imgui()
 {
     // Define UI here
@@ -148,21 +149,6 @@ void imgui()
     ImGui::SliderFloat("Roughness", &shadingData.roughness, 0.0f, 1.0f);
     ImGui::SliderFloat("Metallic", &shadingData.metallic, 0.0f, 1.0f);
     ImGui::SliderFloat("Light Intensity", &shadingData.intensity, 1.0f, 10.0f);
-
-    /*
-    ImGui::Separator();
-    ImGui::Text("Diffuse Model");
-    ImGui::Checkbox("0: Debug", &debug);
-    ImGui::Checkbox("1: Diffuse Lighting", &diffuseLighting);
-    ImGui::Checkbox("2: Toon Lighting Diffuse", &toonLightingDiffuse);
-    ImGui::Checkbox("3: Toon X Lighting", &toonxLighting);
-
-    ImGui::Separator();
-    ImGui::Text("Specular Model");
-    ImGui::Checkbox("4: Phong Specular Lighting", &phongSpecularLighting);
-    ImGui::Checkbox("5: Blinn-Phong Specular Lighting", &blinnPhongSpecularLighting);
-    ImGui::Checkbox("6: Toon Lighting Specular", &toonLightingSpecular);
-    */
 
     ImGui::Separator();
     ImGui::Combo("Diffuse Mode", &diffuseMode, diffuseModes.data(), (int)diffuseModes.size());
@@ -281,6 +267,7 @@ void imgui()
     ImGui::End();
     ImGui::Render();
 }
+#pragma endregion
 
 std::optional<glm::vec3> tomlArrayToVec3(const toml::array* array)
 {
@@ -470,7 +457,8 @@ int main(int argc, char** argv)
     // read toml file from argument line (otherwise use default file)
     std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/checkout.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
-    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
+    // std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/pbr_test.toml";
+    //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/normal_mapping.toml";
 
     // parse initial scene config
     toml::table config;
@@ -540,7 +528,9 @@ int main(int argc, char** argv)
         diffuseMode = 3;
     } else if (diffuse_model == "pbr") {
         diffuseMode = 4;
-    } else {
+    } else if (diffuse_model == "normal-mapping"){
+        diffuseMode = 5;
+    } else{
         diffuseMode = 0;
     }
 
@@ -596,7 +586,8 @@ int main(int argc, char** argv)
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
         //const Mesh mesh = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/scene.obj"));
-        const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
+        Mesh mesh = mergeMeshes(loadMesh(mesh_path));
+        calculateTangentsAndBitangents(mesh);
 
         window.registerKeyCallback([&](int key, int /* scancode */, int action, int /* mods */) {
             if (key == '\\' && action == GLFW_PRESS) {
@@ -654,6 +645,9 @@ int main(int argc, char** argv)
         const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
         const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
         const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
+
+        const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
+        const Shader masterShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/master_shader.glsl").build();
 
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
@@ -730,6 +724,38 @@ int main(int argc, char** argv)
         // Set interpolation for texture sampling (GL_NEAREST for no interpolation).
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
+        // Create Normal Texture
+        // Normal Texture
+        int normalWidth, normalHeight, normalChannels;
+        stbi_uc* normal_pixels = stbi_load(RESOURCE_ROOT "resources/normal_map1.png", &normalWidth, &normalHeight, &normalChannels, STBI_rgb);
+
+        GLuint texNormal;
+        glGenTextures(1, &texNormal);
+        glBindTexture(GL_TEXTURE_2D, texNormal);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, normalWidth, normalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, normal_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(normal_pixels);
+
+        // Material Texture
+        int matWidth, matHeight, matChannels;
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/wave.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+
+        GLuint texMat;
+        glGenTextures(1, &texMat);
+        glBindTexture(GL_TEXTURE_2D, texMat);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, matWidth, matHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, mat_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(mat_pixels);
 
 
         // === Create Shadow Texture ===
@@ -873,14 +899,6 @@ int main(int argc, char** argv)
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
 
-            /*
-            std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting"};
-            std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
-            */
-
-            //for (const Light& light : lights) {
-                //renderedSomething = false;
-
             int applyTextureInt = applyTexture ? 1 : 0;
             switch (diffuseMode) {
                 case 0: // Debug
@@ -935,7 +953,39 @@ int main(int argc, char** argv)
                     glUniform1f(pbrShader.getUniformLocation("intensity"), shadingData.intensity);
                     render(pbrShader);
                     break;
+                case 5: // normal mapping
+                    normalShader.bind();
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, texNormal);
+                    glUniform1i(normalShader.getUniformLocation("texNormal"), 0);
+                    glActiveTexture(GL_TEXTURE1);
+                    // Normal Mapping Texture
+                    glBindTexture(GL_TEXTURE_2D, texToon);
+                    glUniform1i(normalShader.getUniformLocation("texMat"), 1);
+                    glUniform3fv(normalShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                    // glUniform3fv(normalShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));
+                    // glUniform3fv(normalShader.getUniformLocation("kd"), 1, glm::value_ptr(shadingData.kd));
+                    // glUniform3fv(normalShader.getUniformLocation("lightColor"), 1, glm::value_ptr(lights[selectedLightIndex].color));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("model"), 1, GL_FALSE, glm::value_ptr(model));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                    glUniformMatrix4fv(normalShader.getUniformLocation("proj"), 1, GL_FALSE, glm::value_ptr(projection));
+                    // Bind vertex data.
+                    glBindVertexArray(vao);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+                    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+                    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+                    // Enable the tangent and bitangent attributes
+                    glEnableVertexAttribArray(2);
+                    glEnableVertexAttribArray(3);
+                    glEnableVertexAttribArray(4);
+                        
+                    // Execute draw command.
+                    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
+                    glBindVertexArray(0);
+                    break;
                 default: // Debug mode as default
                     debugShader.bind();
                     render(debugShader);
@@ -1068,6 +1118,7 @@ int main(int argc, char** argv)
         glDeleteFramebuffers(1, &framebuffer);
         glDeleteTextures(1, &texShadow);
         glDeleteTextures(1, &texLight);
+        glDeleteTextures(1, &texNormal);
         glDeleteTextures(1, &texToon);
         glDeleteBuffers(1, &vbo);
         glDeleteBuffers(1, &ibo);
@@ -1544,3 +1595,4 @@ int main(int argc, char** argv)
     
     return 0;
 }
+#pragma endregion
