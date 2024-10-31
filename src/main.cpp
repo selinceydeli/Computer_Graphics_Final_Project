@@ -67,12 +67,13 @@ std::array samplingModes {"Single Sample", "PCF"};
 bool shadows = false;
 bool pcf = false;
 bool applyTexture = false;
+bool multipleShadows = false;
 
 int samplingMode = 0;
 int diffuseMode = 0;
 int specularMode = 0;
 
-bool transparency = true;
+bool transparency = false;
 
 bool applyMinimap = false;
 
@@ -122,6 +123,9 @@ struct Light {
 std::vector<Light> lights {};
 size_t selectedLightIndex = 0;
 
+std::vector<Light> secondaryLights {};
+size_t selectedSecondaryLightIndex = 0;
+
 void resetLights()
 {
     lights.clear();
@@ -163,6 +167,31 @@ void imgui()
     ImGui::Checkbox("Enable Texture to Light", &lights[selectedLightIndex].has_texture);
     ImGui::Checkbox("Enable Shadows", &shadows);
     ImGui::Checkbox("Enable PCF", &pcf);
+    ImGui::Checkbox("Shadows for Multiple Light Sources", &multipleShadows);
+
+    ImGui::Separator();
+    ImGui::Text("Secondary Lights");
+
+    std::vector<std::string> secondaryItemStrings = {};
+    for (size_t i = 0; i < secondaryLights.size(); i++) {
+        auto string = "Secondary Light " + std::to_string(i);
+        secondaryItemStrings.push_back(string);
+    }
+
+    std::vector<const char*> secondaryItemCStrings = {};
+    for (const auto& string : secondaryItemStrings) {
+        secondaryItemCStrings.push_back(string.c_str());
+    }
+
+    int tempSecondarySelectedItem = static_cast<int>(selectedSecondaryLightIndex);
+    if (ImGui::ListBox("Secondary Lights", &tempSecondarySelectedItem, secondaryItemCStrings.data(), (int)secondaryItemCStrings.size(), 1)) {
+        selectedSecondaryLightIndex = static_cast<size_t>(tempSecondarySelectedItem);
+    }
+
+    if (!secondaryLights.empty()) {
+        Light& selectedLight = secondaryLights[selectedSecondaryLightIndex];
+        ImGui::SliderFloat3("Secondary Light Position", &selectedLight.position[0], -10.0f, 10.0f);
+    }
     
     ImGui::Separator();
     ImGui::Checkbox("Enable Mini Map", &applyMinimap);
@@ -214,7 +243,7 @@ void imgui()
     }
 
     ImGui::Separator();
-    ImGui::Text("Lights");
+    ImGui::Text("Primary Lights");
 
     // Display lights in scene
     std::vector<std::string> itemStrings = {};
@@ -484,7 +513,7 @@ int main(int argc, char** argv)
     shadingData.toonDiscretize = (int) config["material"]["toonDiscretize"].value_or(0);
     shadingData.toonSpecularThreshold = config["material"]["toonSpecularThreshold"].value_or(0.0f);
 
-    // read lights
+    // read lights (primary)
     lights = std::vector<Light> {};
     size_t num_lights = config["lights"]["positions"].as_array()->size();
     std::cout << num_lights << std::endl;
@@ -506,6 +535,24 @@ int main(int argc, char** argv)
 
         lights.emplace_back(Light { pos, color, is_spotlight, direction, has_texture, { width, height, sourceNumChannels, pixels } });
     }
+
+    // Add only one secondary light source
+    secondaryLights = std::vector<Light> {};
+    glm::vec3 pos = glm::vec3(-3.766f, 3.243f, -0.503f);
+    glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 direction = glm::normalize(target - pos);
+    auto color = tomlArrayToVec3(config["lights"]["colors"][0].as_array()).value();
+    bool is_spotlight = config["lights"]["is_spotlight"][0].value<bool>().value();
+    bool has_texture = config["lights"]["has_texture"][0].value<bool>().value();
+
+    auto tex_path = std::string(RESOURCE_ROOT) + config["mesh"]["path"].value_or("resources/dragon.obj");
+    int width = 0, height = 0, sourceNumChannels = 0;// Number of channels in source image. pixels will always be the requested number of channels (3).
+    stbi_uc* pixels = nullptr;        
+    if (has_texture) {
+        pixels = stbi_load(tex_path.c_str(), &width, &height, &sourceNumChannels, STBI_rgb);
+    }
+    applyTexture = has_texture;
+    secondaryLights.emplace_back(Light { pos, color, is_spotlight, direction, has_texture, { width, height, sourceNumChannels, pixels } });
 
     // Create window
     Window window { "Shading", glm::ivec2(WIDTH, HEIGHT), OpenGLVersion::GL41 };
@@ -661,6 +708,8 @@ int main(int argc, char** argv)
         const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
         const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
         const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
+        const Shader secondaryMainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader2_frag.glsl").build();
+        const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
                 
@@ -821,6 +870,33 @@ int main(int argc, char** argv)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texShadow, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
+        // === Create Shadow Texture for the Second Light ===
+        GLuint shadowTex2;
+        const int SHADOWTEX2_WIDTH = 1024;
+        const int SHADOWTEX2_HEIGHT = 1024;
+        glGenTextures(1, &shadowTex2);
+        glBindTexture(GL_TEXTURE_2D, shadowTex2);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, SHADOWTEX2_WIDTH, SHADOWTEX2_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+
+        // Set behaviour for when texture coordinates are outside the [0, 1] range.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Set interpolation for texture sampling (GL_NEAREST for no interpolation).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+                
+        // === Create framebuffer for shadow texture 2 ===
+        GLuint shadowFramebuffer2;
+        glGenFramebuffers(1, &shadowFramebuffer2);
+        glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer2);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowTex2, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
         // Free the CPU memory after we copied the image to the GPU.
         stbi_image_free(pixels);
         stbi_image_free(light_pixels);
@@ -841,7 +917,7 @@ int main(int argc, char** argv)
         glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texScreen, 0);
 
-        //depth render buffer
+        // Depth render buffer
         GLuint depthRBO;
         glGenRenderbuffers(1, &depthRBO);
         glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
@@ -849,10 +925,6 @@ int main(int argc, char** argv)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         
-        // Check if framebuffer is complete
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Error: Post-process framebuffer is not complete!" << std::endl;
-        }
 
         // Create a framebuffer for minimap
         GLuint minimapFBO;
@@ -868,13 +940,10 @@ int main(int argc, char** argv)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Error: Minimap framebuffer is not complete!" << std::endl;
-        }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         
-        // Enable depth testing.
+        // Enable depth testing
         glEnable(GL_DEPTH_TEST);
 
         // Main loop.
@@ -916,6 +985,14 @@ int main(int argc, char** argv)
             );
             glm::mat4 lightMVP = mainProjectionMatrix * lightViewMatrix;
 
+            // Set light projection and view matrix for the secondary light
+            glm::mat4 secondaryLightViewMatrix = glm::lookAt(
+                secondaryLights[selectedSecondaryLightIndex].position,
+                secondaryLights[selectedSecondaryLightIndex].position + glm::normalize(secondaryLights[selectedSecondaryLightIndex].direction),
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+            glm::mat4 secondaryLightMVP = mainProjectionMatrix * secondaryLightViewMatrix;
+
             // Set model/view/projection matrix.
             const glm::vec3 cameraPos = activeCamera->position();
             const glm::mat4 model { 1.0f };
@@ -944,6 +1021,40 @@ int main(int argc, char** argv)
                 // Bind vertex data and draw
                 glBindVertexArray(vao);
                 glVertexAttribPointer(shadowShader.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+
+                // Unbind framebuffer
+                if (post_process) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, postBuffer);
+                } else {
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                }
+            }
+
+            glClearDepth(1.0);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            // === Render the Second Shadow Map ===
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer2);
+
+                // Clear the shadow map and set needed options
+                glClearDepth(1.0);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
+
+                // Bind the shader
+                shadowShader2.bind();
+
+                // Set viewport size
+                glViewport(0, 0, SHADOWTEX2_WIDTH, SHADOWTEX2_HEIGHT);
+                
+                glUniformMatrix4fv(shadowShader2.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(secondaryLightMVP));
+
+                // Bind vertex data and draw
+                glBindVertexArray(vao);
+                glVertexAttribPointer(shadowShader2.getAttributeLocation("pos"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
 
                 // Unbind framebuffer
@@ -1178,6 +1289,24 @@ int main(int argc, char** argv)
                 glUniform3fv(mainShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(mainShader);
+            }
+
+            if (multipleShadows) {
+                secondaryMainShader.bind();
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, shadowTex2);
+                glUniform1i(secondaryMainShader.getUniformLocation("shadowTex2"), 2);
+                int isSpotlightInt = secondaryLights[selectedSecondaryLightIndex].is_spotlight ? 1 : 0;
+                int shadowsInt = shadows ? 1 : 0;
+                int pcfInt = pcf ? 1 : 0;
+                glUniform1i(secondaryMainShader.getUniformLocation("isSpotlight"), isSpotlightInt);
+                glUniform1i(secondaryMainShader.getUniformLocation("shadows"), shadowsInt);
+                glUniform1i(secondaryMainShader.getUniformLocation("pcf"), pcfInt);
+                glUniformMatrix4fv(secondaryMainShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glUniformMatrix4fv(secondaryMainShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(secondaryLightMVP));
+                glUniform3fv(secondaryMainShader.getUniformLocation("lightPos"), 1, glm::value_ptr(secondaryLights[selectedSecondaryLightIndex].position));
+                glBlendFunc(GL_DST_COLOR, GL_ZERO);
+                render(secondaryMainShader);
             }
 
             if (lights[selectedLightIndex].has_texture) {
