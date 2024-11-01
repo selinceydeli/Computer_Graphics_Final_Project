@@ -220,7 +220,7 @@ void meshFlipZ(Mesh& mesh)
 
 void calculateTangentsAndBitangents(Mesh& mesh) {
     std::ofstream outputFile;
-    bool debug = true;
+    bool debug = false;
     std::string output_path = "/Users/lemon/Documents/TUD/Courses/CGA/computer-graphics-final-project/logs/tangent.txt";
 
     if (debug) {
