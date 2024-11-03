@@ -141,7 +141,7 @@ size_t selectedSecondaryLightIndex = 0;
 void setParticleValues(Particle &particle, glm::vec2 offset) {
     particle.life = 50.0f;
     float brightness = 0.5f - static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
-    particle.color = glm::vec4(1.0, brightness * 0.4f, 0.0f, 1.0f); // Defining a reddish-yellowish color
+    particle.color = glm::vec4(1.0, brightness * 0.2f, 0.0f, 1.0f); // Defining a reddish-yellowish color
     particle.position = glm::vec2(
         offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f,  // x pos in range [-5, 5]
         offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f   // z pos in range [-5, 5]
@@ -1264,7 +1264,7 @@ int main(int argc, char** argv)
                 particles[i].life -= dt;
                 if (particles[i].life > 0.0) {
                     particles[i].position += particles[i].speed * dt;
-                    particles[i].color -= 0.01 * dt;
+                    particles[i].color.y += 0.02 * dt;
                 }
             }
             
