@@ -636,6 +636,13 @@ int main(int argc, char** argv)
     float resolution = 1.0f;   
     initializeEvenSpacedCurved(spacing, resolution);
 
+    // Initialize the particle array
+    unsigned int numParticles = 500;
+    std::vector<Particle> particles;
+  
+    for (unsigned int i = 0; i < numParticles; ++i)
+        particles.push_back(Particle());
+
     #pragma region Render
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
