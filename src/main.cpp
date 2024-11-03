@@ -75,8 +75,9 @@ int diffuseMode = 0;
 int specularMode = 0;
 
 bool transparency = false;
-
 bool applyMinimap = false;
+
+bool isParticleEffect = false;
 
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
@@ -137,28 +138,28 @@ size_t selectedLightIndex = 0;
 std::vector<Light> secondaryLights {};
 size_t selectedSecondaryLightIndex = 0;
 
+// Particle effect helper methods
+unsigned int lastEliminatedParticle;
+
 // Method for initializing the values for a new particle
 void setParticleValues(Particle &particle, glm::vec2 offset) {
-    particle.life = 50.0f;
+    particle.life = 50.0f; // Define the lifetime of the particles
     float brightness = 0.5f - static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
-    particle.color = glm::vec4(1.0, brightness * 0.2f, 0.0f, 1.0f); // Defining a reddish-yellowish color
+    particle.color = glm::vec4(1.0, brightness * 0.2f, 0.0f, 1.0f); 
     particle.position = glm::vec2(
-        offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f,  // x pos in range [-5, 5]
-        offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f   // z pos in range [-5, 5]
-    );
-    
+        offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f, 
+        offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f  
+    );  
     particle.speed = glm::vec2(
-        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, // Small random x velocity
-        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f   // Small random z velocity
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, 
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f  
     );
-    
 }
 
 void initializeRandomSeed() {
     std::srand(static_cast<unsigned int>(std::time(0)));
 }
 
-unsigned int lastEliminatedParticle;
 // Method for getting the next particle index to be eliminated from the scene
 unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Particle>& particlesArray) {
     unsigned int idx = 0;
@@ -218,6 +219,9 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Combo("Specular Mode", &specularMode, specularModes.data(), (int)specularModes.size());
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Texture to Light", &lights[selectedLightIndex].has_texture);
@@ -772,7 +776,6 @@ int main(int argc, char** argv)
         const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
 
         const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
-
         const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
         const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
         
@@ -815,50 +818,6 @@ int main(int argc, char** argv)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         
         glBindVertexArray(0);
-
-        // // Create VAO & VBO for particles.
-        // float particleVertices[numParticles * 5];
-        // float emitterCoordsX = abs(particleEmitter.x / 10);
-        // float emitterCoordsY = particleEmitter.y / 10;
-        // for(unsigned int i=0; i< numParticles; i++) {
-        //     unsigned int index = i * 5;
-        //     float randomValue = 0.0;
-        //     particleVertices[index] = particleEmitter.x + randomValue;
-        //     particleVertices[index+1] = particleEmitter.y - randomValue;
-        //     particleVertices[index+2] = particleEmitter.z + randomValue;
-        //     particleVertices[index+3] = emitterCoordsX + randomValue;
-        //     particleVertices[index+4] = emitterCoordsY - randomValue;
-        // }
-        
-
-        // for (unsigned int i = 0; i < numParticles; i++) {
-        //     unsigned int index = i * 5;
-        //     float x = particleVertices[index];
-        //     float y = particleVertices[index + 1];
-        //     float z = particleVertices[index + 2];
-        //     float texCoordX = particleVertices[index + 3];
-        //     float texCoordY = particleVertices[index + 4];
-
-        //     std::cout << "Particle " << i << ": "
-        //             << "Position(" << x << ", " << y << ", " << z << "), "
-        //             << "TexCoords(" << texCoordX << ", " << texCoordY << ")" << std::endl;
-        // }
-
-        // GLuint parVAO, parVBO;
-        // glGenVertexArrays(1, &parVAO);
-        // glBindVertexArray(parVAO);
-
-        // glGenBuffers(1, &parVBO);
-        // glBindBuffer(GL_ARRAY_BUFFER, parVBO);
-        // glBufferData(GL_ARRAY_BUFFER, numParticles * 5 * sizeof(float), particleVertices, GL_DYNAMIC_DRAW);
-
-        // glEnableVertexAttribArray(0);
-        // glEnableVertexAttribArray(1);
-        // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-        // glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-
-        // glBindBuffer(GL_ARRAY_BUFFER, 0);
-        // glBindVertexArray(0);
 
 
         // Create Vertex Buffer Object and Index Buffer Objects.
@@ -1252,38 +1211,38 @@ int main(int argc, char** argv)
             // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
             #pragma region particles
-            // Update particles
-            const int updateParticleSize = 2;
-            for (size_t i = 0; i < updateParticleSize; i++)
-            {
-                int deleteIndex = nextEliminatedParticle(numParticles, particles);
-                replaceParticle(particles[deleteIndex]);
-            }
-            for (size_t i = 0; i < numParticles; i++)
-            {
-                particles[i].life -= dt;
-                if (particles[i].life > 0.0) {
-                    particles[i].position += particles[i].speed * dt;
-                    particles[i].color.y += 0.02 * dt;
-                }
-            }
-            
 
-            // Particle Render
-            particleShader.bind();
-            glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
-            glBindVertexArray(quadVAO);
-            for (Particle& particle : particles)
-            {
-                // float randomX = ((rand() % 100) - 50) / 10.0f;
-                // float randomY = ((rand() % 100) - 50) / 10.0f;
-                glUniform2fv(particleShader.getUniformLocation("offset"), 1, glm::value_ptr(particle.position));
-                glUniform4fv(particleShader.getUniformLocation("particleColor"), 1, glm::value_ptr(particle.color));
-                // std::cout << random << std::endl;
-                glDrawArrays(GL_TRIANGLES, 0, 6);
+            if (isParticleEffect) {
+                // Updating particle values
+                const int updateParticleSize = 2;
+                for (size_t i = 0; i < updateParticleSize; i++) {
+                    int deleteIndex = nextEliminatedParticle(numParticles, particles);
+                    replaceParticle(particles[deleteIndex]);
+                }
+                for (size_t i = 0; i < numParticles; i++) {
+                    particles[i].life -= dt;
+                    if (particles[i].life > 0.0) { // If particles haven't faded away yet
+                        particles[i].position += particles[i].speed * dt;
+                        particles[i].color.y += 0.02 * dt;
+                    }
+                }
+
+                // Particle render
+                particleShader.bind();
+                glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glBindVertexArray(quadVAO);
+                for (Particle& particle : particles)
+                {
+                    // float randomX = ((rand() % 100) - 50) / 10.0f;
+                    // float randomY = ((rand() % 100) - 50) / 10.0f;
+                    glUniform2fv(particleShader.getUniformLocation("offset"), 1, glm::value_ptr(particle.position));
+                    glUniform4fv(particleShader.getUniformLocation("particleColor"), 1, glm::value_ptr(particle.color));
+                    // std::cout << random << std::endl;
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                }
+                glBindVertexArray(0);
+                // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Additive blending.
             }
-            glBindVertexArray(0);
-            // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Additive blending.
             #pragma endregion
 
             // If post process, load the render output to color texture
