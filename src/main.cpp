@@ -36,6 +36,11 @@ DISABLE_WARNINGS_POP()
 #include <glm/glm.hpp>
 #include <cmath>
 
+// Animated textures - global variables
+float animatedTextureFrameInterval = 1.0f / 5.0f; // 5 FPS
+float animatedTextureLastFrameTime = 0.0f;
+int animatedTextureCurrentFrame = 0;
+
 std::vector<Mesh> animationMeshes; 
 std::vector<GLuint> vaos, vbos, ibos;
 float frameDuration = 0.0f;  
@@ -164,7 +169,7 @@ void imgui()
     ImGui::Combo("Specular Mode", &specularMode, specularModes.data(), (int)specularModes.size());
 
     ImGui::Separator();
-    ImGui::Checkbox("Enable Texture to Light", &lights[selectedLightIndex].has_texture);
+    ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
     ImGui::Checkbox("Enable Shadows", &shadows);
     ImGui::Checkbox("Enable PCF", &pcf);
     ImGui::Checkbox("Shadows for Multiple Light Sources", &multipleShadows);
@@ -831,7 +836,7 @@ int main(int argc, char** argv)
 
         // Material Texture
         int matWidth, matHeight, matChannels;
-        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/wave.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/brickwall.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
 
         GLuint texMat;
         glGenTextures(1, &texMat);
@@ -942,6 +947,12 @@ int main(int argc, char** argv)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+        // Animated textures
+        std::vector<GLuint> texFrames;
+        texFrames.push_back(texLight);
+        texFrames.push_back(texToon);
+        texFrames.push_back(texNormal);
+        texFrames.push_back(texMat);
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
@@ -1137,6 +1148,13 @@ int main(int argc, char** argv)
                 glEnable(GL_DEPTH_TEST);
             }
 
+            // Animated textures - cycle through textures
+            float currTime = glfwGetTime();
+            if (currTime - animatedTextureLastFrameTime >= animatedTextureFrameInterval) {
+                animatedTextureCurrentFrame = (animatedTextureCurrentFrame + 1) % texFrames.size();
+                animatedTextureLastFrameTime = currTime;
+            }
+
             int applyTextureInt = applyTexture ? 1 : 0;
             switch (diffuseMode) {
                 case 0: // Debug
@@ -1312,7 +1330,7 @@ int main(int argc, char** argv)
             if (lights[selectedLightIndex].has_texture) {
                 lightTextureShader.bind();
                 glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, texLight);
+                glBindTexture(GL_TEXTURE_2D, texFrames[animatedTextureCurrentFrame]);
                 glUniform1i(lightTextureShader.getUniformLocation("texLight"), 2);
                 int applyTextureInt = lights[selectedLightIndex].has_texture ? 1 : 0;
                 glUniform1i(lightTextureShader.getUniformLocation("applyTexture"), applyTextureInt);
