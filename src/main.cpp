@@ -714,6 +714,7 @@ int main(int argc, char** argv)
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
                 
+        #pragma region DefineBuffer
         // Set Quad for post processing
         float quadVertices[] = {
             // positions   // texCoords
@@ -774,7 +775,9 @@ int main(int argc, char** argv)
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
+        #pragma endregion
 
+        #pragma region DefineTexture
         // Load image from disk to CPU memory.
         int width, height, sourceNumChannels; // Number of channels in source image. pixels will always be the requested number of channels (3).
         stbi_uc* pixels = stbi_load(RESOURCE_ROOT "resources/toon_map.png", &width, &height, &sourceNumChannels, STBI_rgb);
@@ -943,6 +946,7 @@ int main(int argc, char** argv)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+        #pragma endregion
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
