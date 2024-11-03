@@ -745,6 +745,28 @@ int main(int argc, char** argv)
         
         glBindVertexArray(0);
 
+        // Create VAO & VBO for particles.
+        float particleVertices[] = {
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f
+        };
+
+        GLuint parVAO, parVBO;
+        glGenVertexArrays(1, &parVAO);
+        glBindVertexArray(parVAO);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+        glGenBuffers(1, &parVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, parVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(particleVertices), &particleVertices, GL_DYNAMIC_DRAW);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
         glGenBuffers(1, &vbo);
