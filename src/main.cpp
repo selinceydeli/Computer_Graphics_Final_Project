@@ -20,6 +20,7 @@ DISABLE_WARNINGS_POP()
 #include <framework/shader.h>
 #include <framework/trackball.h>
 #include <framework/window.h>
+#include <framework/particle.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_opengl2.h>
