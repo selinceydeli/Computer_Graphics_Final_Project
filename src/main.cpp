@@ -37,7 +37,7 @@ DISABLE_WARNINGS_POP()
 #include <cmath>
 
 // Animated textures - global variables
-float animatedTextureFrameInterval = 1.0f / 5.0f; // 5 FPS
+float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
 float animatedTextureLastFrameTime = 0.0f;
 int animatedTextureCurrentFrame = 0;
 
@@ -798,6 +798,43 @@ int main(int argc, char** argv)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
+        // Red brick texture
+        int redBrickWidth, redBrickHeight, redBrickChannels;
+        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/red-textured-wall.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
+
+        // Create a texture on the GPU with 3 channels with 8 bits each.
+        GLuint texRedBrick;
+        glGenTextures(1, &texRedBrick);
+        glBindTexture(GL_TEXTURE_2D, texRedBrick);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, red_brick_pixels);
+
+        // Set behavior for when texture coordinates are outside the [0, 1] range.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Set interpolation for texture sampling (GL_NEAREST for no interpolation).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(red_brick_pixels);
+
+
+        // Rainbow texture
+        int rainbowWidth, rainbowHeight, rainbowChannels;
+        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/textured-rainbow.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
+
+        // Create a texture on the GPU with 3 channels with 8 bits each.
+        GLuint texRainbow;
+        glGenTextures(1, &texRainbow);
+        glBindTexture(GL_TEXTURE_2D, texRainbow);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rainbowWidth, rainbowHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, rainbow_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(rainbow_pixels);
+
+
         // Create Light Texture
         int texWidth, texHeight, texChannels;
         auto light_texture_path = std::string(RESOURCE_ROOT) + config["lights"]["texture_path"][0].value_or("resources/smiley.png");
@@ -950,9 +987,11 @@ int main(int argc, char** argv)
         // Animated textures
         std::vector<GLuint> texFrames;
         texFrames.push_back(texLight);
-        texFrames.push_back(texToon);
+        //texFrames.push_back(texToon);
         texFrames.push_back(texNormal);
         texFrames.push_back(texMat);
+        texFrames.push_back(texRainbow);
+        texFrames.push_back(texRedBrick);
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
