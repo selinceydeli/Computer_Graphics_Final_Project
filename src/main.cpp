@@ -139,22 +139,19 @@ size_t selectedSecondaryLightIndex = 0;
 
 // Method for initializing the values for a new particle
 void setParticleValues(Particle &particle, glm::vec2 offset) {
-    particle.life = 1.0f;
-    float brightness = 0.5f + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
-    particle.color = glm::vec4(brightness, brightness * 0.4f, 0.0f, 1.0f); // Defining a reddish-yellowish color
+    particle.life = 50.0f;
+    float brightness = 0.5f - static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
+    particle.color = glm::vec4(1.0, brightness * 0.4f, 0.0f, 1.0f); // Defining a reddish-yellowish color
     particle.position = glm::vec2(
-        -5.0f + static_cast<float>(rand()) / RAND_MAX * 10.0f,  // x pos in range [-5, 5]
-        // 0.0f,                                                   // keep y pos on the plane level
-        -5.0f + static_cast<float>(rand()) / RAND_MAX * 10.0f   // z pos in range [-5, 5]
+        offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f,  // x pos in range [-5, 5]
+        offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f   // z pos in range [-5, 5]
     );
-    particle.speed = glm::vec2(0.0f);
-    /*
-    particle.speed = glm::vec3(
+    
+    particle.speed = glm::vec2(
         static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, // Small random x velocity
-        0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,  // Upward y velocity in range [0.5, 1.0]
         static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f   // Small random z velocity
     );
-    */
+    
 }
 
 void initializeRandomSeed() {
@@ -704,10 +701,10 @@ int main(int argc, char** argv)
     for (unsigned int i = 0; i < numParticles; ++i)
     {
         particles.push_back(Particle());
-        // setParticleValues(particles[i], glm::vec2(0.0f, 0.0f));
+        setParticleValues(particles[i], glm::vec2(0.0f, 0.0f));
     }
 
-    glm::vec3 particleEmitter = glm::vec3(-5.0, 1.0, 5.0);
+    glm::vec2 particleEmitter = glm::vec2(-5.0, 5.0);
 
     #pragma region Render
     if (!animated) {
@@ -1267,7 +1264,7 @@ int main(int argc, char** argv)
                 particles[i].life -= dt;
                 if (particles[i].life > 0.0) {
                     particles[i].position += particles[i].speed * dt;
-                    particles[i].color -= 0.1 * dt;
+                    particles[i].color -= 0.01 * dt;
                 }
             }
             
