@@ -11,8 +11,8 @@ DISABLE_WARNINGS_PUSH()
 DISABLE_WARNINGS_POP()
 
 struct Particle {
-    glm::vec3 position;
-    glm::vec3 speed;
+    glm::vec2 position;
+    glm::vec2 speed;
     glm::vec4 color;
     float     life;
   
