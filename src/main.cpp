@@ -127,6 +127,32 @@ size_t selectedLightIndex = 0;
 std::vector<Light> secondaryLights {};
 size_t selectedSecondaryLightIndex = 0;
 
+
+// Method for initializing the values for a new particle
+void setParticleValues(Particle &particle, glm::vec2 offset) {
+    particle.life = 1.0f;
+    float brightness = 0.5f + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
+    particle.color = glm::vec4(brightness, brightness * 0.4f, 0.0f, 1.0f); // Defining a reddish-yellowish color
+    particle.position = glm::vec3(
+        -5.0f + static_cast<float>(rand()) / RAND_MAX * 10.0f,  // x pos in range [-5, 5]
+        0.0f,                                                   // keep y pos on the plane level
+        -5.0f + static_cast<float>(rand()) / RAND_MAX * 10.0f   // z pos in range [-5, 5]
+    );
+    particle.speed = glm::vec3(0.0f);
+    /*
+    particle.speed = glm::vec3(
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, // Small random x velocity
+        0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,  // Upward y velocity in range [0.5, 1.0]
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f   // Small random z velocity
+    );
+    */
+}
+
+void initializeRandomSeed() {
+    std::srand(static_cast<unsigned int>(std::time(0)));
+}
+
+
 void resetLights()
 {
     lights.clear();
@@ -462,6 +488,7 @@ glm::vec3 interpolate(const glm::vec3& start, const glm::vec3& end, float t) {
     return (1.0f - t) * start + t * end;
 }
 
+
 void moveLightAlongEvenlySpacedPath(float timeChange) {
     static size_t idx = 0;
     static float accumulatedDist = 0.0f;
@@ -637,11 +664,17 @@ int main(int argc, char** argv)
     initializeEvenSpacedCurved(spacing, resolution);
 
     // Initialize the particle array
-    unsigned int numParticles = 500;
+    initializeRandomSeed();
+    const unsigned int numParticles = 5000;
     std::vector<Particle> particles;
   
     for (unsigned int i = 0; i < numParticles; ++i)
+    {
         particles.push_back(Particle());
+        // setParticleValues(particles[i], glm::vec2(0.0f, 0.0f));
+    }
+
+    glm::vec3 particleEmitter = glm::vec3(-5.0, 1.0, 5.0);
 
     #pragma region Render
     if (!animated) {
@@ -720,7 +753,8 @@ int main(int argc, char** argv)
         const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-                
+        const Shader particleShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/particle_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/particle_frag.glsl").build();
+              
         #pragma region DefineBuffer
         // Set Quad for post processing
         float quadVertices[] = {
@@ -752,26 +786,49 @@ int main(int argc, char** argv)
         
         glBindVertexArray(0);
 
-        // Create VAO & VBO for particles.
-        float particleVertices[] = {
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f
-        };
-
-        GLuint parVAO, parVBO;
-        glGenVertexArrays(1, &parVAO);
-        glBindVertexArray(parVAO);
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
-        glGenBuffers(1, &parVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, parVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(particleVertices), &particleVertices, GL_DYNAMIC_DRAW);
+        // // Create VAO & VBO for particles.
+        // float particleVertices[numParticles * 5];
+        // float emitterCoordsX = abs(particleEmitter.x / 10);
+        // float emitterCoordsY = particleEmitter.y / 10;
+        // for(unsigned int i=0; i< numParticles; i++) {
+        //     unsigned int index = i * 5;
+        //     float randomValue = 0.0;
+        //     particleVertices[index] = particleEmitter.x + randomValue;
+        //     particleVertices[index+1] = particleEmitter.y - randomValue;
+        //     particleVertices[index+2] = particleEmitter.z + randomValue;
+        //     particleVertices[index+3] = emitterCoordsX + randomValue;
+        //     particleVertices[index+4] = emitterCoordsY - randomValue;
+        // }
         
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+
+        // for (unsigned int i = 0; i < numParticles; i++) {
+        //     unsigned int index = i * 5;
+        //     float x = particleVertices[index];
+        //     float y = particleVertices[index + 1];
+        //     float z = particleVertices[index + 2];
+        //     float texCoordX = particleVertices[index + 3];
+        //     float texCoordY = particleVertices[index + 4];
+
+        //     std::cout << "Particle " << i << ": "
+        //             << "Position(" << x << ", " << y << ", " << z << "), "
+        //             << "TexCoords(" << texCoordX << ", " << texCoordY << ")" << std::endl;
+        // }
+
+        // GLuint parVAO, parVBO;
+        // glGenVertexArrays(1, &parVAO);
+        // glBindVertexArray(parVAO);
+
+        // glGenBuffers(1, &parVBO);
+        // glBindBuffer(GL_ARRAY_BUFFER, parVBO);
+        // glBufferData(GL_ARRAY_BUFFER, numParticles * 5 * sizeof(float), particleVertices, GL_DYNAMIC_DRAW);
+
+        // glEnableVertexAttribArray(0);
+        // glEnableVertexAttribArray(1);
+        // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        // glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // glBindVertexArray(0);
 
 
         // Create Vertex Buffer Object and Index Buffer Objects.
@@ -1162,7 +1219,18 @@ int main(int argc, char** argv)
             glDepthFunc(GL_EQUAL); // Only draw a pixel if it's depth matches the value stored in the depth buffer.
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+            // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+            // Particle Render
+            particleShader.bind();
+            glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+            for (Particle particle : particles)
+            {
+                // glUniform1f(particleShader.getAttributeLocation("offset"), 10.0);
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                glBindVertexArray(0);
+            }
 
             // If post process, load the render output to color texture
             if (post_process) {

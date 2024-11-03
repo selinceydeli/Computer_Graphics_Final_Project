@@ -51,7 +51,7 @@ rotations = [0.450295, 0.617848, 0.0]
 dist = 2
 
 [render_settings]
-diffuse_model = "pbr" 
+diffuse_model = "lambert" 
 specular_model = "none"   
 shadows = false            
 pcf = false 
