@@ -6,6 +6,8 @@
 DISABLE_WARNINGS_PUSH()
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
+#include <glm/vec3.hpp>
+#include <vector>
 DISABLE_WARNINGS_POP()
 
 struct Particle {
@@ -18,12 +20,10 @@ struct Particle {
       : position(0.0f), speed(0.0f), color(1.0f), life(0.0f) { }
 };  
 
-// Method for getting the next particle index to be eliminated
-unsigned int nextEliminatedParticle();
+unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Particle>& particlesArray);
+void setParticleValues(Particle &particle, glm::vec2 offset);
+void initializeRandomSeed();
 
-// Method for updating the values of the eliminated particle
-void updateParticleValues(Particle &particle, glm::vec2 offset);
+extern unsigned int lastEliminatedParticle; // Global variable
 
 #endif // PARTICLE_H
-
-
