@@ -50,6 +50,8 @@ const int HEIGHT = 800;
 bool post_process = false;
 bool show_imgui = true;
 
+bool envMap = true;
+
 /*
 bool debug = true;
 bool diffuseLighting = false;
@@ -60,33 +62,40 @@ bool toonLightingSpecular = false;
 bool toonxLighting = false;
 */
 
-std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"};
-std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
+std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"}; std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"}; std::array samplingModes {"Single Sample", "PCF"};bool shadows = false;bool pcf = false;bool applyTexture = false;bool multipleShadows = false;int samplingMode = 0;int diffuseMode = 0;int specularMode = 0; bool transparency = false; bool applyMinimap = false; bool applySmoothPath = false; bool showBezierCurve = false; bool moveCamera = false; bool isConstantSpeedAlongBezier = false; bool useOriginalCamera = true; bool isTopViewCamera = false; bool isFrontViewCamera = false; bool isLeftViewCamera = false; bool isRightViewCamera = false;
 
-std::array samplingModes {"Single Sample", "PCF"};
-bool shadows = false;
-bool pcf = false;
-bool applyTexture = false;
-bool multipleShadows = false;
 
-int samplingMode = 0;
-int diffuseMode = 0;
-int specularMode = 0;
+float skyboxVert[] = {
+    -1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, -1.0f,
+    -1.0f, 1.0f, -1.0f 
+};
 
-bool transparency = false;
-
-bool applyMinimap = false;
-
-bool applySmoothPath = false;     
-bool showBezierCurve = false;
-bool moveCamera = false;  
-bool isConstantSpeedAlongBezier = false;
-
-bool useOriginalCamera = true; 
-bool isTopViewCamera = false;
-bool isFrontViewCamera = false;
-bool isLeftViewCamera = false;
-bool isRightViewCamera = false;
+unsigned int skyboxIndices[] = {
+    // Right 
+    1, 2, 6,
+    6, 5, 1,
+    // Left 
+    0, 4, 7,
+    7, 3, 0,
+    // Top
+    4, 5, 6,
+    6, 7, 4,
+    // Bottom
+    0, 3, 2,
+    2, 1, 0,
+    // Back
+    0, 1, 5, 
+    5, 4, 0,
+    // Front 
+    3, 7, 6, 
+    6, 2, 3
+};
 
 struct {
     // Diffuse (Lambert)
@@ -102,14 +111,12 @@ struct {
     float metallic = 1.0;
     float intensity = 1.0;
 } shadingData;
-
 struct Texture {
     int width;
     int height;
     int channels;
     stbi_uc* texture_data;
 };
-
 // Lights
 struct Light {
     glm::vec3 position;
@@ -119,13 +126,7 @@ struct Light {
     bool has_texture;
     Texture texture;
 };
-
-std::vector<Light> lights {};
-size_t selectedLightIndex = 0;
-
-std::vector<Light> secondaryLights {};
-size_t selectedSecondaryLightIndex = 0;
-
+std::vector<Light> lights {};size_t selectedLightIndex = 0;std::vector<Light> secondaryLights {};size_t selectedSecondaryLightIndex = 0;
 void resetLights()
 {
     lights.clear();
@@ -133,7 +134,7 @@ void resetLights()
     selectedLightIndex = 0;
 }
 
-#pragma region GUI
+//#pragma region GUI
 void imgui()
 {
     // Define UI here
@@ -142,6 +143,9 @@ void imgui()
 
     ImGui::Begin("Final Project Part 1 : Modern Shading");
     ImGui::Text("Press \\ to show/hide this menu");
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Environment Map", &envMap);
 
     ImGui::Separator();
     ImGui::Text("Material parameters");
@@ -302,7 +306,7 @@ void imgui()
     ImGui::End();
     ImGui::Render();
 }
-#pragma endregion
+//#pragma endregion
 
 std::optional<glm::vec3> tomlArrayToVec3(const toml::array* array)
 {
@@ -635,7 +639,7 @@ int main(int argc, char** argv)
     float resolution = 1.0f;   
     initializeEvenSpacedCurved(spacing, resolution);
 
-    #pragma region Render
+    //#pragma region Render
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
@@ -712,7 +716,8 @@ int main(int argc, char** argv)
         const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-                
+        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();        
+        
         // Set Quad for post processing
         float quadVertices[] = {
             // positions   // texCoords
@@ -742,6 +747,52 @@ int main(int argc, char** argv)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         
         glBindVertexArray(0);
+
+        GLuint skyboxVAO, skyboxVBO, skyboxIBO;
+        glGenVertexArrays(1, &skyboxVAO);
+        glGenBuffers(1, &skyboxVBO);
+        glGenBuffers(1, &skyboxIBO);
+        glBindVertexArray(skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVert), &skyboxVert, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxIBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0); 
+        glBindVertexArray(0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        
+        std::string facesCubemap[6] = {
+            std::string(RESOURCE_ROOT) + "resources/right.jpg",
+            std::string(RESOURCE_ROOT) + "resources/left.jpg",
+            std::string(RESOURCE_ROOT) + "resources/top.jpg",
+            std::string(RESOURCE_ROOT) + "resources/bottom.jpg",
+            std::string(RESOURCE_ROOT) + "resources/front.jpg",
+            std::string(RESOURCE_ROOT) + "resources/back.jpg"
+        };
+
+        GLuint cubemapTexture;
+        glGenTextures(1, &cubemapTexture);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+        for(unsigned int i = 0; i < 6; i++) {
+            int width, height, nrChannels;
+            stbi_uc* data = stbi_load(facesCubemap[i].c_str(), &width, &height, &nrChannels, 0);
+            if(data) {
+                stbi_set_flip_vertically_on_load(false);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+                stbi_image_free(data);
+            } else {
+                std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
+                stbi_image_free(data);
+            }
+        }
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
@@ -1138,6 +1189,7 @@ int main(int argc, char** argv)
             }
 
             int applyTextureInt = applyTexture ? 1 : 0;
+
             switch (diffuseMode) {
                 case 0: // Debug
                     debugShader.bind();
@@ -1391,8 +1443,37 @@ int main(int argc, char** argv)
                 glDrawArrays(GL_TRIANGLES, 0, 6);
                 glBindVertexArray(0);
             }
+            if(envMap) {
+               
+                glDepthFunc(GL_LEQUAL);
+                envMapShader.bind();
+                glm::mat4 view = glm::mat4(1.0f);
+                glm::mat4 projection = glm::mat4(1.0f);
+                // We make the mat4 into a mat3 and then a mat4 again in order to get rid of the last row and column
+                // The last row and column affect the translation of the skybox (which we don't want to affect)
+                //view = activeCamera->viewMatrix();
+                //projection = activeCamera->projectionMatrix();
+                view = glm::mat4(glm::mat3(glm::lookAt(activeCamera->position(), activeCamera->position() + activeCamera->forward(), activeCamera->up())));
+		        projection = glm::perspective(glm::radians(45.0f), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+                glUniformMatrix4fv(envMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(envMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projection));
+                //glUniform1i(envMapShader.getUniformLocation("skybox"), )
+                // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
+                // where an object is present (a depth of 1.0f will always fail against any object's depth value)
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+                glUniform1i(envMapShader.getUniformLocation("skybox"), 0);
+                glBindVertexArray(skyboxVAO);
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
 
-            // Present result to the screen.
+                // Switch back to the normal depth function
+                glDepthFunc(GL_LESS);
+
+            }
+            //}
+            
             window.swapBuffers();
         }
 
@@ -1408,8 +1489,8 @@ int main(int argc, char** argv)
         glDeleteVertexArrays(1, &quadVAO);
         glDeleteBuffers(1, &quadVBO);
     } 
-    #pragma endregion
-    #pragma region Animation
+    //#pragma endregion
+    //#pragma region Animation
     else { // if animated
         
         animationMeshes = loadMeshesFromDirectory(mesh_path);
@@ -1875,8 +1956,8 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
     }
-    #pragma endregion
+    //#pragma endregion
     
     return 0;
 }
-#pragma endregion
+//#pragma endregion
