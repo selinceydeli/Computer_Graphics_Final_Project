@@ -128,7 +128,7 @@ struct Particle {
     float     life;
   
     Particle() 
-      : position(0.0f), speed(0.0f), color(1.0f), life(0.0f) { }
+      : position(0.0f), speed(glm::vec2(2.0, 0.0)), color(glm::vec4(1.0, 0.0, 0.0, 1.0)), life(1.0f) { }
 };  
 
 std::vector<Light> lights {};
@@ -1267,6 +1267,7 @@ int main(int argc, char** argv)
                 particles[i].life -= dt;
                 if (particles[i].life > 0.0) {
                     particles[i].position += particles[i].speed * dt;
+                    particles[i].color -= 0.1 * dt;
                 }
             }
             
@@ -1274,16 +1275,17 @@ int main(int argc, char** argv)
             // Particle Render
             particleShader.bind();
             glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+            glBindVertexArray(quadVAO);
             for (Particle& particle : particles)
             {
                 // float randomX = ((rand() % 100) - 50) / 10.0f;
                 // float randomY = ((rand() % 100) - 50) / 10.0f;
-                glUniform2fv(particleShader.getUniformLocation("kd"), 1, glm::value_ptr(particle.position));
+                glUniform2fv(particleShader.getUniformLocation("offset"), 1, glm::value_ptr(particle.position));
+                glUniform4fv(particleShader.getUniformLocation("particleColor"), 1, glm::value_ptr(particle.color));
                 // std::cout << random << std::endl;
-                glBindVertexArray(quadVAO);
                 glDrawArrays(GL_TRIANGLES, 0, 6);
-                glBindVertexArray(0);
             }
+            glBindVertexArray(0);
             // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Additive blending.
             #pragma endregion
 
