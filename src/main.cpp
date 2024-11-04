@@ -20,6 +20,7 @@ DISABLE_WARNINGS_POP()
 #include <framework/shader.h>
 #include <framework/trackball.h>
 #include <framework/window.h>
+// #include <framework/particle.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_opengl2.h>
@@ -55,6 +56,8 @@ const int HEIGHT = 800;
 bool post_process = false;
 bool show_imgui = true;
 
+bool envMap = false;
+
 /*
 bool debug = true;
 bool diffuseLighting = false;
@@ -65,33 +68,49 @@ bool toonLightingSpecular = false;
 bool toonxLighting = false;
 */
 
-std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"};
-std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"};
-
-std::array samplingModes {"Single Sample", "PCF"};
-bool shadows = false;
-bool pcf = false;
-bool applyTexture = false;
-bool multipleShadows = false;
-
-int samplingMode = 0;
-int diffuseMode = 0;
-int specularMode = 0;
+std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"}; std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"}; std::array samplingModes {"Single Sample", "PCF"};bool shadows = false;bool pcf = false;bool applyTexture = false;bool multipleShadows = false;int samplingMode = 0;int diffuseMode = 0;int specularMode = 0; bool transparency = false; bool applyMinimap = false; bool applySmoothPath = false; bool showBezierCurve = false; bool moveCamera = false; bool isConstantSpeedAlongBezier = false; bool useOriginalCamera = true; bool isTopViewCamera = false; bool isFrontViewCamera = false; bool isLeftViewCamera = false; bool isRightViewCamera = false;
 
 bool transparency = false;
-
 bool applyMinimap = false;
+
+bool isParticleEffect = false;
 
 bool applySmoothPath = false;     
 bool showBezierCurve = false;
 bool moveCamera = false;  
 bool isConstantSpeedAlongBezier = false;
 
-bool useOriginalCamera = true; 
-bool isTopViewCamera = false;
-bool isFrontViewCamera = false;
-bool isLeftViewCamera = false;
-bool isRightViewCamera = false;
+float skyboxVert[] = {
+    -1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, -1.0f,
+    -1.0f, 1.0f, -1.0f 
+};
+
+unsigned int skyboxIndices[] = {
+    // Right 
+    1, 2, 6,
+    6, 5, 1,
+    // Left 
+    0, 4, 7,
+    7, 3, 0,
+    // Top
+    4, 5, 6,
+    6, 7, 4,
+    // Bottom
+    0, 3, 2,
+    2, 1, 0,
+    // Back
+    0, 1, 5, 
+    5, 4, 0,
+    // Front 
+    3, 7, 6, 
+    6, 2, 3
+};
 
 struct {
     // Diffuse (Lambert)
@@ -107,14 +126,12 @@ struct {
     float metallic = 1.0;
     float intensity = 1.0;
 } shadingData;
-
 struct Texture {
     int width;
     int height;
     int channels;
     stbi_uc* texture_data;
 };
-
 // Lights
 struct Light {
     glm::vec3 position;
@@ -125,11 +142,68 @@ struct Light {
     Texture texture;
 };
 
+struct Particle {
+    glm::vec2 position;
+    glm::vec2 speed;
+    glm::vec4 color;
+    float     life;
+  
+    Particle() 
+      : position(0.0f), speed(glm::vec2(2.0, 0.0)), color(glm::vec4(1.0, 0.0, 0.0, 1.0)), life(1.0f) { }
+};  
+
 std::vector<Light> lights {};
 size_t selectedLightIndex = 0;
 
 std::vector<Light> secondaryLights {};
 size_t selectedSecondaryLightIndex = 0;
+
+// Particle effect helper methods
+unsigned int lastEliminatedParticle;
+
+// Method for initializing the values for a new particle
+void setParticleValues(Particle &particle, glm::vec2 offset) {
+    particle.life = 50.0f; // Define the lifetime of the particles
+    float brightness = 0.5f - static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
+    particle.color = glm::vec4(1.0, brightness * 0.2f, 0.0f, 1.0f); 
+    particle.position = glm::vec2(
+        offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f, 
+        offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f  
+    );  
+    particle.speed = glm::vec2(
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, 
+        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f  
+    );
+}
+
+void initializeRandomSeed() {
+    std::srand(static_cast<unsigned int>(std::time(0)));
+}
+
+// Method for getting the next particle index to be eliminated from the scene
+unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Particle>& particlesArray) {
+    unsigned int idx = 0;
+    for (idx = lastEliminatedParticle; idx < particleNum; idx++) {
+        if (particlesArray[idx].life <= 0.0f) {
+            lastEliminatedParticle = idx;
+            return idx;
+        }
+    }
+    for (idx = 0; idx < lastEliminatedParticle; idx++) {
+        if (particlesArray[idx].life <= 0.0f) {
+            lastEliminatedParticle = idx;
+            return idx;
+        }
+    }
+    lastEliminatedParticle = 0;
+    return 0;
+}
+
+void replaceParticle(Particle& particle) {
+    //TODO
+}
+
+std::vector<Light> lights {};size_t selectedLightIndex = 0;std::vector<Light> secondaryLights {};size_t selectedSecondaryLightIndex = 0;
 
 void resetLights()
 {
@@ -138,7 +212,7 @@ void resetLights()
     selectedLightIndex = 0;
 }
 
-#pragma region GUI
+//#pragma region GUI
 void imgui()
 {
     // Define UI here
@@ -167,6 +241,9 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Combo("Specular Mode", &specularMode, specularModes.data(), (int)specularModes.size());
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
@@ -200,6 +277,9 @@ void imgui()
     
     ImGui::Separator();
     ImGui::Checkbox("Enable Mini Map", &applyMinimap);
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Environment Map", &envMap);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Post Processing", &post_process);
@@ -307,7 +387,7 @@ void imgui()
     ImGui::End();
     ImGui::Render();
 }
-#pragma endregion
+//#pragma endregion
 
 std::optional<glm::vec3> tomlArrayToVec3(const toml::array* array)
 {
@@ -465,6 +545,7 @@ void initializeEvenSpacedCurved(float spacing, float resolution) {
 glm::vec3 interpolate(const glm::vec3& start, const glm::vec3& end, float t) {
     return (1.0f - t) * start + t * end;
 }
+
 
 void moveLightAlongEvenlySpacedPath(float timeChange) {
     static size_t idx = 0;
@@ -640,7 +721,24 @@ int main(int argc, char** argv)
     float resolution = 1.0f;   
     initializeEvenSpacedCurved(spacing, resolution);
 
-    #pragma region Render
+
+    // Initialize the particle array
+    initializeRandomSeed();
+    const unsigned int numParticles = 500;
+    const float dt = 0.01;
+    std::vector<Particle> particles;
+  
+    for (unsigned int i = 0; i < numParticles; ++i)
+    {
+        particles.push_back(Particle());
+        setParticleValues(particles[i], glm::vec2(0.0f, 0.0f));
+    }
+
+    glm::vec2 particleEmitter = glm::vec2(-5.0, 5.0);
+
+
+    //#pragma region Render
+
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
@@ -706,7 +804,6 @@ int main(int argc, char** argv)
         const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
 
         const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
-
         const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
         const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
         
@@ -717,7 +814,13 @@ int main(int argc, char** argv)
         const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-                
+        const Shader particleShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/particle_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/particle_frag.glsl").build();
+              
+        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();  
+        const Shader otherEnvMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/env_map_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/env_map_frag.glsl").build();      
+        
+        #pragma region DefineBuffer
+
         // Set Quad for post processing
         float quadVertices[] = {
             // positions   // texCoords
@@ -747,6 +850,55 @@ int main(int argc, char** argv)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         
         glBindVertexArray(0);
+
+
+        GLuint skyboxVAO, skyboxVBO, skyboxIBO;
+        glGenVertexArrays(1, &skyboxVAO);
+        glGenBuffers(1, &skyboxVBO);
+        glGenBuffers(1, &skyboxIBO);
+        glBindVertexArray(skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVert), &skyboxVert, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxIBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0); 
+        glBindVertexArray(0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        
+        std::string facesCubemap[6] = {
+            std::string(RESOURCE_ROOT) + "resources/right.jpg",
+            std::string(RESOURCE_ROOT) + "resources/left.jpg",
+            std::string(RESOURCE_ROOT) + "resources/top.jpg",
+            std::string(RESOURCE_ROOT) + "resources/bottom.jpg",
+            std::string(RESOURCE_ROOT) + "resources/front.jpg",
+            std::string(RESOURCE_ROOT) + "resources/back.jpg"
+        };
+
+        GLuint cubemapTexture;
+        glGenTextures(1, &cubemapTexture);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        
+        for(unsigned int i = 0; i < 6; i++) {
+            int width, height, nrChannels;
+            stbi_uc* data = stbi_load(facesCubemap[i].c_str(), &width, &height, &nrChannels, 0);
+            if(data) {
+                stbi_set_flip_vertically_on_load(false);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+                stbi_image_free(data);
+            } else {
+                std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
+                stbi_image_free(data);
+            }
+        }
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
@@ -778,7 +930,9 @@ int main(int argc, char** argv)
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
+        #pragma endregion
 
+        #pragma region DefineTexture
         // Load image from disk to CPU memory.
         int width, height, sourceNumChannels; // Number of channels in source image. pixels will always be the requested number of channels (3).
         stbi_uc* pixels = stbi_load(RESOURCE_ROOT "resources/toon_map.png", &width, &height, &sourceNumChannels, STBI_rgb);
@@ -984,6 +1138,7 @@ int main(int argc, char** argv)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
         // Animated textures
         std::vector<GLuint> texFrames;
         texFrames.push_back(texLight);
@@ -992,6 +1147,9 @@ int main(int argc, char** argv)
         texFrames.push_back(texMat);
         texFrames.push_back(texRainbow);
         texFrames.push_back(texRedBrick);
+
+        #pragma endregion
+
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
@@ -1050,7 +1208,50 @@ int main(int argc, char** argv)
             const glm::mat4 view = activeCamera->viewMatrix();
             const glm::mat4 projection = activeCamera->projectionMatrix();
             const glm::mat4 mvp = projection * view * model;
+            
+            if(envMap) {
+                glDepthFunc(GL_LEQUAL);
+                envMapShader.bind();
+                glm::mat4 vieww = glm::mat4(1.0f);
+                glm::mat4 projectionn = glm::mat4(1.0f);
+                // We make the mat4 into a mat3 and then a mat4 again in order to get rid of the last row and column
+                // The last row and column affect the translation of the skybox (which we don't want to affect)
+                vieww = glm::mat4(glm::mat3(glm::lookAt(activeCamera->position(), activeCamera->position() + activeCamera->forward(), activeCamera->up())));
+		        projectionn = glm::perspective(glm::radians(45.0f), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+                glUniformMatrix4fv(envMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(vieww));
+                glUniformMatrix4fv(envMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projectionn));
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+                glUniform1i(envMapShader.getUniformLocation("skybox"), 0);
+                glBindVertexArray(skyboxVAO);
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+                glDepthFunc(GL_LESS);
+                
+                otherEnvMapShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+                glUniform1i(otherEnvMapShader.getUniformLocation("skybox"), 0);
 
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("model"), 1, GL_FALSE, glm::value_ptr(model));
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projection));
+                
+               glUniform3fv(otherEnvMapShader.getUniformLocation("cameraPos"), 1, glm::value_ptr(activeCamera->position()));
+               
+                // Bind vertex data.
+                glBindVertexArray(vao);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                // Execute draw command.
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+                
+                glBindVertexArray(0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+            }
+
+            else {
             // === Step 1: Render the Shadow Map ===
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -1178,7 +1379,42 @@ int main(int argc, char** argv)
             glDepthFunc(GL_EQUAL); // Only draw a pixel if it's depth matches the value stored in the depth buffer.
             glEnable(GL_BLEND); // Enable blending.
             glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending.
+            // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+            #pragma region particles
+
+            if (isParticleEffect) {
+                // Updating particle values
+                const int updateParticleSize = 2;
+                for (size_t i = 0; i < updateParticleSize; i++) {
+                    int deleteIndex = nextEliminatedParticle(numParticles, particles);
+                    replaceParticle(particles[deleteIndex]);
+                }
+                for (size_t i = 0; i < numParticles; i++) {
+                    particles[i].life -= dt;
+                    if (particles[i].life > 0.0) { // If particles haven't faded away yet
+                        particles[i].position += particles[i].speed * dt;
+                        particles[i].color.y += 0.02 * dt;
+                    }
+                }
+
+                // Particle render
+                particleShader.bind();
+                glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glBindVertexArray(quadVAO);
+                for (Particle& particle : particles)
+                {
+                    // float randomX = ((rand() % 100) - 50) / 10.0f;
+                    // float randomY = ((rand() % 100) - 50) / 10.0f;
+                    glUniform2fv(particleShader.getUniformLocation("offset"), 1, glm::value_ptr(particle.position));
+                    glUniform4fv(particleShader.getUniformLocation("particleColor"), 1, glm::value_ptr(particle.color));
+                    // std::cout << random << std::endl;
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                }
+                glBindVertexArray(0);
+                // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Additive blending.
+            }
+            #pragma endregion
 
             // If post process, load the render output to color texture
             if (post_process) {
@@ -1195,6 +1431,7 @@ int main(int argc, char** argv)
             }
 
             int applyTextureInt = applyTexture ? 1 : 0;
+
             switch (diffuseMode) {
                 case 0: // Debug
                     debugShader.bind();
@@ -1448,8 +1685,9 @@ int main(int argc, char** argv)
                 glDrawArrays(GL_TRIANGLES, 0, 6);
                 glBindVertexArray(0);
             }
-
-            // Present result to the screen.
+            
+            }
+            
             window.swapBuffers();
         }
 
@@ -1465,8 +1703,8 @@ int main(int argc, char** argv)
         glDeleteVertexArrays(1, &quadVAO);
         glDeleteBuffers(1, &quadVBO);
     } 
-    #pragma endregion
-    #pragma region Animation
+    //#pragma endregion
+    //#pragma region Animation
     else { // if animated
         
         animationMeshes = loadMeshesFromDirectory(mesh_path);
@@ -1932,8 +2170,8 @@ int main(int argc, char** argv)
         glDeleteBuffers(1, &ibo);
         glDeleteVertexArrays(1, &vao);
     }
-    #pragma endregion
+    //#pragma endregion
     
     return 0;
 }
-#pragma endregion
+//#pragma endregion
