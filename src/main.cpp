@@ -50,7 +50,7 @@ const int HEIGHT = 800;
 bool post_process = false;
 bool show_imgui = true;
 
-bool envMap = true;
+bool envMap = false;
 
 /*
 bool debug = true;
@@ -716,7 +716,8 @@ int main(int argc, char** argv)
         const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
 
         const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();        
+        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();  
+        const Shader otherEnvMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/env_map_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/env_map_frag.glsl").build();      
         
         // Set Quad for post processing
         float quadVertices[] = {
@@ -775,12 +776,7 @@ int main(int argc, char** argv)
         GLuint cubemapTexture;
         glGenTextures(1, &cubemapTexture);
         glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
+        
         for(unsigned int i = 0; i < 6; i++) {
             int width, height, nrChannels;
             stbi_uc* data = stbi_load(facesCubemap[i].c_str(), &width, &height, &nrChannels, 0);
@@ -793,6 +789,12 @@ int main(int argc, char** argv)
                 stbi_image_free(data);
             }
         }
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
 
         // Create Vertex Buffer Object and Index Buffer Objects.
         GLuint vbo;
@@ -1051,7 +1053,50 @@ int main(int argc, char** argv)
             const glm::mat4 view = activeCamera->viewMatrix();
             const glm::mat4 projection = activeCamera->projectionMatrix();
             const glm::mat4 mvp = projection * view * model;
+            
+            if(envMap) {
+                glDepthFunc(GL_LEQUAL);
+                envMapShader.bind();
+                glm::mat4 vieww = glm::mat4(1.0f);
+                glm::mat4 projectionn = glm::mat4(1.0f);
+                // We make the mat4 into a mat3 and then a mat4 again in order to get rid of the last row and column
+                // The last row and column affect the translation of the skybox (which we don't want to affect)
+                vieww = glm::mat4(glm::mat3(glm::lookAt(activeCamera->position(), activeCamera->position() + activeCamera->forward(), activeCamera->up())));
+		        projectionn = glm::perspective(glm::radians(45.0f), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+                glUniformMatrix4fv(envMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(vieww));
+                glUniformMatrix4fv(envMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projectionn));
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+                glUniform1i(envMapShader.getUniformLocation("skybox"), 0);
+                glBindVertexArray(skyboxVAO);
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+                glDepthFunc(GL_LESS);
+                
+                otherEnvMapShader.bind();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+                glUniform1i(otherEnvMapShader.getUniformLocation("skybox"), 0);
 
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("model"), 1, GL_FALSE, glm::value_ptr(model));
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(otherEnvMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projection));
+                
+               glUniform3fv(otherEnvMapShader.getUniformLocation("cameraPos"), 1, glm::value_ptr(activeCamera->position()));
+               
+                // Bind vertex data.
+                glBindVertexArray(vao);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                // Execute draw command.
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.triangles.size()) * 3, GL_UNSIGNED_INT, nullptr);
+                
+                glBindVertexArray(0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+            }
+
+            else {
             // === Step 1: Render the Shadow Map ===
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -1443,36 +1488,8 @@ int main(int argc, char** argv)
                 glDrawArrays(GL_TRIANGLES, 0, 6);
                 glBindVertexArray(0);
             }
-            if(envMap) {
-               
-                glDepthFunc(GL_LEQUAL);
-                envMapShader.bind();
-                glm::mat4 view = glm::mat4(1.0f);
-                glm::mat4 projection = glm::mat4(1.0f);
-                // We make the mat4 into a mat3 and then a mat4 again in order to get rid of the last row and column
-                // The last row and column affect the translation of the skybox (which we don't want to affect)
-                //view = activeCamera->viewMatrix();
-                //projection = activeCamera->projectionMatrix();
-                view = glm::mat4(glm::mat3(glm::lookAt(activeCamera->position(), activeCamera->position() + activeCamera->forward(), activeCamera->up())));
-		        projection = glm::perspective(glm::radians(45.0f), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
-                glUniformMatrix4fv(envMapShader.getUniformLocation("view"), 1, GL_FALSE, glm::value_ptr(view));
-                glUniformMatrix4fv(envMapShader.getUniformLocation("projection"), 1, GL_FALSE, glm::value_ptr(projection));
-                //glUniform1i(envMapShader.getUniformLocation("skybox"), )
-                // Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
-                // where an object is present (a depth of 1.0f will always fail against any object's depth value)
-                
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-                glUniform1i(envMapShader.getUniformLocation("skybox"), 0);
-                glBindVertexArray(skyboxVAO);
-                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-                glBindVertexArray(0);
-
-                // Switch back to the normal depth function
-                glDepthFunc(GL_LESS);
-
+            
             }
-            //}
             
             window.swapBuffers();
         }
