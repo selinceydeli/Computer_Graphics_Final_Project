@@ -37,6 +37,11 @@ DISABLE_WARNINGS_POP()
 #include <glm/glm.hpp>
 #include <cmath>
 
+// Animated textures - global variables
+float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
+float animatedTextureLastFrameTime = 0.0f;
+int animatedTextureCurrentFrame = 0;
+
 std::vector<Mesh> animationMeshes; 
 std::vector<GLuint> vaos, vbos, ibos;
 float frameDuration = 0.0f;  
@@ -231,7 +236,7 @@ void imgui()
     ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
 
     ImGui::Separator();
-    ImGui::Checkbox("Enable Texture to Light", &lights[selectedLightIndex].has_texture);
+    ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
     ImGui::Checkbox("Enable Shadows", &shadows);
     ImGui::Checkbox("Enable PCF", &pcf);
     ImGui::Checkbox("Shadows for Multiple Light Sources", &multipleShadows);
@@ -937,6 +942,43 @@ int main(int argc, char** argv)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
+        // Red brick texture
+        int redBrickWidth, redBrickHeight, redBrickChannels;
+        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/red-textured-wall.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
+
+        // Create a texture on the GPU with 3 channels with 8 bits each.
+        GLuint texRedBrick;
+        glGenTextures(1, &texRedBrick);
+        glBindTexture(GL_TEXTURE_2D, texRedBrick);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, red_brick_pixels);
+
+        // Set behavior for when texture coordinates are outside the [0, 1] range.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Set interpolation for texture sampling (GL_NEAREST for no interpolation).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(red_brick_pixels);
+
+
+        // Rainbow texture
+        int rainbowWidth, rainbowHeight, rainbowChannels;
+        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/textured-rainbow.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
+
+        // Create a texture on the GPU with 3 channels with 8 bits each.
+        GLuint texRainbow;
+        glGenTextures(1, &texRainbow);
+        glBindTexture(GL_TEXTURE_2D, texRainbow);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rainbowWidth, rainbowHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, rainbow_pixels);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(rainbow_pixels);
+
+
         // Create Light Texture
         int texWidth, texHeight, texChannels;
         auto light_texture_path = std::string(RESOURCE_ROOT) + config["lights"]["texture_path"][0].value_or("resources/smiley.png");
@@ -975,7 +1017,7 @@ int main(int argc, char** argv)
 
         // Material Texture
         int matWidth, matHeight, matChannels;
-        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/wave.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/brickwall.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
 
         GLuint texMat;
         glGenTextures(1, &texMat);
@@ -1086,7 +1128,18 @@ int main(int argc, char** argv)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, minimapTexture, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
+        // Animated textures
+        std::vector<GLuint> texFrames;
+        texFrames.push_back(texLight);
+        //texFrames.push_back(texToon);
+        texFrames.push_back(texNormal);
+        texFrames.push_back(texMat);
+        texFrames.push_back(texRainbow);
+        texFrames.push_back(texRedBrick);
+
         #pragma endregion
+
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
@@ -1360,6 +1413,13 @@ int main(int argc, char** argv)
                 glEnable(GL_DEPTH_TEST);
             }
 
+            // Animated textures - cycle through textures
+            float currTime = glfwGetTime();
+            if (currTime - animatedTextureLastFrameTime >= animatedTextureFrameInterval) {
+                animatedTextureCurrentFrame = (animatedTextureCurrentFrame + 1) % texFrames.size();
+                animatedTextureLastFrameTime = currTime;
+            }
+
             int applyTextureInt = applyTexture ? 1 : 0;
 
             switch (diffuseMode) {
@@ -1536,7 +1596,7 @@ int main(int argc, char** argv)
             if (lights[selectedLightIndex].has_texture) {
                 lightTextureShader.bind();
                 glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, texLight);
+                glBindTexture(GL_TEXTURE_2D, texFrames[animatedTextureCurrentFrame]);
                 glUniform1i(lightTextureShader.getUniformLocation("texLight"), 2);
                 int applyTextureInt = lights[selectedLightIndex].has_texture ? 1 : 0;
                 glUniform1i(lightTextureShader.getUniformLocation("applyTexture"), applyTextureInt);
