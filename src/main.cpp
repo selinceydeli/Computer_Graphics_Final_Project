@@ -65,15 +65,7 @@ bool toonxLighting = false;
 
 std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"}; std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"}; std::array samplingModes {"Single Sample", "PCF"};bool shadows = false;bool pcf = false;bool applyTexture = false;bool multipleShadows = false;int samplingMode = 0;int diffuseMode = 0;int specularMode = 0; bool transparency = false; bool applyMinimap = false; bool applySmoothPath = false; bool showBezierCurve = false; bool moveCamera = false; bool isConstantSpeedAlongBezier = false; bool useOriginalCamera = true; bool isTopViewCamera = false; bool isFrontViewCamera = false; bool isLeftViewCamera = false; bool isRightViewCamera = false;
 
-bool transparency = false;
-bool applyMinimap = false;
-
 bool isParticleEffect = false;
-
-bool applySmoothPath = false;     
-bool showBezierCurve = false;
-bool moveCamera = false;  
-bool isConstantSpeedAlongBezier = false;
 
 float skyboxVert[] = {
     -1.0f, -1.0f, 1.0f,
@@ -197,8 +189,6 @@ unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Partic
 void replaceParticle(Particle& particle) {
     //TODO
 }
-
-std::vector<Light> lights {};size_t selectedLightIndex = 0;std::vector<Light> secondaryLights {};size_t selectedSecondaryLightIndex = 0;
 
 void resetLights()
 {
