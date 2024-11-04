@@ -145,9 +145,6 @@ void imgui()
     ImGui::Text("Press \\ to show/hide this menu");
 
     ImGui::Separator();
-    ImGui::Checkbox("Enable Environment Map", &envMap);
-
-    ImGui::Separator();
     ImGui::Text("Material parameters");
     ImGui::SliderFloat("Shininess", &shadingData.shininess, 0.0f, 100.f);
 
@@ -199,6 +196,9 @@ void imgui()
     
     ImGui::Separator();
     ImGui::Checkbox("Enable Mini Map", &applyMinimap);
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Environment Map", &envMap);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Post Processing", &post_process);
