@@ -13,6 +13,7 @@ add_executable(Master_Assignment1_P1 "src/main.cpp"
 target_compile_definitions(Master_Assignment1_P1 PRIVATE RESOURCE_ROOT="${CMAKE_CURRENT_LIST_DIR}/")
 target_compile_features(Master_Assignment1_P1 PRIVATE cxx_std_20)
 target_link_libraries(Master_Assignment1_P1 PRIVATE CGFramework)
+#target_link_libraries(Master_Assignment1_P1 PRIVATE CGFramework glu32)
 enable_sanitizers(Master_Assignment1_P1)
 set_project_warnings(Master_Assignment1_P1)
 
