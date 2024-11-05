@@ -1,3 +1,4 @@
+#include "gpu_mesh.h"
 // Disable compiler warnings in third-party code (which we cannot change).
 #include <framework/disable_all_warnings.h>
 #include <framework/opengl_includes.h>
@@ -37,10 +38,143 @@ DISABLE_WARNINGS_POP()
 #include <glm/glm.hpp>
 #include <cmath>
 
+
+struct Node {
+    float radius {1.0f};
+    float spinPeriod {0.0f};
+    int orbitAround {-1};
+    float orbitAltitude {0.0f};
+    float orbitPeriod {0.0f};
+    Node* parent = nullptr;
+    std::string name;
+
+    int meshIndex;
+    //Mesh mesh;
+    glm::mat4 localTransform = glm::identity<glm::mat4>();
+    glm::mat4 worldTransform = glm::identity<glm::mat4>();
+    std::vector<Node*> children = {};
+
+    void update(const glm::mat4& parentTransform) {
+        worldTransform = parentTransform * localTransform;
+        localTransform = worldTransform;
+        // for(Node* child: children) {
+        //     child -> update(worldTransform);
+        // }
+        // for (auto& vertex : mesh.vertices) {
+        //     vertex.position = glm::vec3(worldTransform * glm::vec4(vertex.position, 1.0f));
+        //     vertex.normal = glm::mat3(glm::transpose(glm::inverse(worldTransform))) * vertex.normal; // Correct normal
+        // }
+    }
+};
+// Constants
+float rotationSpeed = 0.0005f; // Orbit speed for bigIndependentSphere
+const float ORBIT_SPEED_BIG = -0.5f;            // Opposite orbit speed for bigSphere
+const float ORBIT_SPEED_MEDIUM = 1.0f;          // Orbit speed for mediumSphere around bigSphere
+const float ORBIT_SPEED_SMALL_1 = 1.0f;         // Orbit speed for smallSphere1 around mediumSphere
+const float ORBIT_SPEED_SMALL_2 = -0.75f;        // Opposite orbit speed for smallSphere2
+
+float spinSpeed = 0.30f;                  // Spin speed around each sphere's axis
+float SPIN_SPEED = 0.30f; 
+
+
+// Function to compute transformation matrices for each sphere (sun & moon)
+glm::mat4 getDayLightTransform(float time) {
+
+    glm::mat4 transform = glm::mat4(1.0f);
+    float orbitAngle = rotationSpeed * time;
+    transform = glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00250f, 0.0f, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), spinSpeed * time/10.0f, glm::vec3(0.0f, 0.0f, 1.0f));
+    return transform;
+
+}
+
+glm::mat4 getBigSphereTransform(float m) {
+    glm::mat4 transform = glm::mat4(1.0f);
+    float orbitAngle = ORBIT_SPEED_BIG * m;
+    transform = glm::rotate(glm::mat4(1.0f), -orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                glm::translate(glm::mat4(1.0f), -glm::vec3(0.00250f, 0.0f, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), -SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+    return transform;
+}
+
+glm::mat4 getMediumSphereTransform(glm::mat4 bigSphereTransform, float m) {
+    glm::mat4 transform = glm::mat4(1.0f);
+    float orbitAngle = ORBIT_SPEED_MEDIUM * m;
+    transform = bigSphereTransform *
+                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00125f, 0.0f, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+    return transform;
+}
+
+glm::mat4 getSmallSphere1Transform(glm::mat4 mediumSphereTransform, float m) {
+    glm::mat4 transform = glm::mat4(1.0f);
+    float orbitAngle = ORBIT_SPEED_SMALL_1 * m;
+    transform = mediumSphereTransform *
+                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.0000520f, 0.0f, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m /50.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+    return transform;
+}
+
+glm::mat4 getSmallSphere2Transform(glm::mat4 mediumSphereTransform, float m) {
+    glm::mat4 transform = glm::mat4(1.0f);
+    float orbitAngle = ORBIT_SPEED_SMALL_2 * m;
+    transform = mediumSphereTransform *
+                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                glm::translate(glm::mat4(1.0f), -glm::vec3(0.000120f, 0.0f, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+    return transform;
+}
+
+void updateNodeTransform(Node* node, float time) {
+    //std::cout << "mesh index of parent: " << node->meshIndex << std::endl;
+    //glm::rotate(matrix, time * 2 * glm::pi<float>() / body.orbitPeriod, glm::vec3(0, 1, 0))
+    const glm::mat4 transform = glm::rotate(node->worldTransform, time * 2 * glm::pi<float>() / 150.0f, glm::vec3(0, 1, 0));
+    node->update(transform);
+    for(Node* childNode : node->children) {
+        //std::cout << "mesh index of child: " << childNode->meshIndex << std::endl;
+        const glm::mat4 transformChild = glm::rotate(childNode->worldTransform, time *3  * glm::pi<float>() / 50.0f, glm::vec3(0, 1, 0));
+        childNode->update(transformChild);
+    }
+    
+}
+
+// std::vector<Node*> animatedNodes;
+// std::vector<Node*> getAnimatedNodes() {
+//     Node bigSphere {0.5f, 850.0f, -1};
+//     bigSphere.meshIndex = 5;
+//     //bigSphere.radius = 0.6;
+//     //bigSphere.spinPeriod = 600.0f;
+
+//     Node mediumSphere {0.3f, 500.0f, 1, 3.944f, 500.0f}; 
+//     mediumSphere.meshIndex = 3;
+//     bigSphere.children.push_back(&mediumSphere);
+//     Node smallSphere1 {0.2f, 300.0f, 2, 1.797f, 200.0f};
+    
+//     smallSphere1.meshIndex = 4;
+//     mediumSphere.children.push_back(&smallSphere1);
+//     Node smallSphere2 {0.2f, 150.0f, 2, 1.932f, 800.0f};
+//     smallSphere2.meshIndex = 7;
+//     mediumSphere.children.push_back(&smallSphere2);
+//     Node bigIndependentSphere {0.6f, 600.0f, -1};
+//     bigIndependentSphere.meshIndex = 6;
+//     //std::vector<Node*> animatedNodes;
+//     animatedNodes.push_back(&bigIndependentSphere);
+//     animatedNodes.push_back(&bigSphere);
+//     animatedNodes.push_back(&mediumSphere);
+//     animatedNodes.push_back(&smallSphere1);
+//     animatedNodes.push_back(&smallSphere2);
+//     return animatedNodes;
+// }
+
 // Animated textures - global variables
 float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
 float animatedTextureLastFrameTime = 0.0f;
 int animatedTextureCurrentFrame = 0;
+bool dayNight = false;
+
 
 std::vector<Mesh> animationMeshes; 
 std::vector<GLuint> vaos, vbos, ibos;
@@ -57,6 +191,7 @@ bool post_process = false;
 bool show_imgui = true;
 
 bool envMap = false;
+bool hierarchicalTransform = false;
 
 /*
 bool debug = true;
@@ -132,6 +267,7 @@ struct Light {
     glm::vec3 direction;
     bool has_texture;
     Texture texture;
+    std::string name;
 };
 
 struct Particle {
@@ -152,6 +288,10 @@ size_t selectedSecondaryLightIndex = 0;
 
 // Particle effect helper methods
 unsigned int lastEliminatedParticle;
+glm::vec3 posForSun = glm::vec3(0.0f);
+glm::vec3 posForMoon = glm::vec3(0.0f);
+Light sunLight {posForSun, glm::vec3(1.0f,0.842f,0.24f), false, glm::vec3(0, 0, 0) };
+Light moonLight {posForMoon, glm::vec3(0.15), false, glm::vec3(0, 0, 0) };
 
 // Method for initializing the values for a new particle
 void setParticleValues(Particle &particle, glm::vec2 offset) {
@@ -201,6 +341,7 @@ void resetLights()
     lights.push_back(Light { glm::vec3(0, 0, 3), glm::vec3(1) });
     selectedLightIndex = 0;
 }
+bool isDay = false;
 
 //#pragma region GUI
 void imgui()
@@ -232,6 +373,17 @@ void imgui()
     ImGui::Separator();
     ImGui::Combo("Specular Mode", &specularMode, specularModes.data(), (int)specularModes.size());
 
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Hierarchical Transformations", &hierarchicalTransform);
+
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Day/Night System", &dayNight);
+    if(dayNight) {
+        if(isDay) ImGui::Text("Currently it is day!");
+        else ImGui::Text("Currently it is night!");
+        ImGui::SliderFloat("Time speed", &rotationSpeed, 0.01f, 5.0f);
+    }
+    
     ImGui::Separator();
     ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
 
@@ -565,6 +717,7 @@ void moveLightAlongEvenlySpacedPath(float timeChange) {
 // Program entry point. Everything starts here.
 int main(int argc, char** argv)
 {
+
     // read toml file from argument line (otherwise use default file)
     std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/final.toml";
     //std::string config_filename = argc == 2 ? std::string(argv[1]) : "resources/default_scene.toml"; // Scene for animation
@@ -726,14 +879,123 @@ int main(int argc, char** argv)
 
     glm::vec2 particleEmitter = glm::vec2(-5.0, 5.0);
 
-
     //#pragma region Render
+    // Shading functionality
+        const Shader debugShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/debug_frag.glsl").build();
+        const Shader lightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/light_vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_frag.glsl").build();
+        const Shader lambertShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/lambert_frag.glsl").build();
+        const Shader phongShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/phong_frag.glsl").build();
+        const Shader blinnPhongShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/blinn_phong_frag.glsl").build();
+        const Shader toonDiffuseShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_diffuse_frag.glsl").build();
+        const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
+        const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
+        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
+
+        const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
+        const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
+        const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
+        
+        const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
+        const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
+        const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
+        const Shader secondaryMainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader2_frag.glsl").build();
+        const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
+
+        const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
+        const Shader particleShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/particle_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/particle_frag.glsl").build();
+              
+        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();  
+        const Shader otherEnvMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/env_map_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/env_map_frag.glsl").build();      
+        
 
     if (!animated) {
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
         //const Mesh mesh = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/scene.obj"));
-        Mesh mesh = mergeMeshes(loadMesh(mesh_path));
+        //hierarchicalTransform
+        std::vector<Mesh> meshes = loadMesh(mesh_path);
+        // std::vector<Mesh> meshes_without;
+        // meshes_without.push_back(meshes.at(0));
+        // meshes_without.push_back(meshes.at(1));
+        // meshes_without.push_back(meshes.at(2));
+        // meshes_without.push_back(meshes.at(3));
+        // meshes_without.push_back(meshes.at(4));
+        // meshes_without.push_back(meshes.at(5));
+        // meshes_without.push_back(meshes.at(6));
+        // meshes_without.push_back(meshes.at(7));
+
+        //GPUMesh mesh_parent(meshes.at(4));
+        //GPUMesh mesh_child(meshes.at(3));
+        // Node bigSphere;
+        // bigSphere.meshIndex = 5;
+        // Node mediumSphere; 
+        // mediumSphere.meshIndex = 3;
+        // bigSphere.children.push_back(&mediumSphere);
+        // Node smallSphere1;
+        // smallSphere1.meshIndex = 4;
+        // mediumSphere.children.push_back(&smallSphere1);
+        // Node smallSphere2;
+        // smallSphere2.meshIndex = 7;
+        // mediumSphere.children.push_back(&smallSphere2);
+        // Node bigIndependentSphere;
+        // bigIndependentSphere.meshIndex = 6;
+        Node bigSphere {0.5f, 850.0f, -1};
+        bigSphere.meshIndex = 5;
+        bigSphere.name = "bigSphere";
+        //bigSphere.radius = 0.6;
+        //bigSphere.spinPeriod = 600.0f;
+
+        Node mediumSphere {0.3f, 600.0f, 0, 0.003944f, 500.0f}; 
+        mediumSphere.meshIndex = 3;
+        mediumSphere.name = "mediumSphere";
+        bigSphere.children.push_back(&mediumSphere);
+        Node smallSphere1 {0.15f, 400.0f, 1, 0.001797f, 200.0f};
+
+        smallSphere1.meshIndex = 4;
+        mediumSphere.children.push_back(&smallSphere1);
+        smallSphere1.name = "smallSphere1";
+        Node smallSphere2 {0.2f, 350.0f, 1, 0.001932f, 800.0f};
+        smallSphere2.meshIndex = 7;
+        smallSphere2.name = "smallSphere2";
+        mediumSphere.children.push_back(&smallSphere2);
+        // Node bigIndependentSphere {0.6f, 600.0f, -1};
+        // bigIndependentSphere.meshIndex = 6;
+        std::vector<Node> allNodes;
+        std::vector<Node*> animatedNodes;
+               
+        //animatedNodes.push_back(&bigIndependentSphere);
+        // animatedNodes.push_back(&bigSphere);
+        // animatedNodes.push_back(&mediumSphere);
+        // animatedNodes.push_back(&smallSphere1);
+        // animatedNodes.push_back(&smallSphere2);
+
+        // allNodes.push_back(Node {
+        //     .radius = 1.0f, 
+        //     .spinPeriod = 850.0f,
+        //     .meshIndex = 5
+        // });
+        // allNodes.push_back(Node {
+        //     .radius = 0.6f,
+        //     .spinPeriod = 500.0f,
+        //     .orbitAround = 1,
+        //     .
+        // })
+        allNodes.push_back(bigSphere);
+        allNodes.push_back(mediumSphere);
+        allNodes.push_back(smallSphere1);
+        allNodes.push_back(smallSphere2);
+        // std::vector<Node*> animatedNodes = getAnimatedNodes();
+        // std::cout << "orbitAround of first small: " << animatedNodes.at(3)->orbitAround << std::endl;
+        // std::cout << "orbitAround of first small: " << animatedNodes.at(1)->orbitAround << std::endl;
+        // animatedNodes.push_back(&bigIndependentSphere);
+        animatedNodes.push_back(&bigSphere);
+        animatedNodes.push_back(&mediumSphere);
+        animatedNodes.push_back(&smallSphere1);
+        animatedNodes.push_back(&smallSphere2);
+
+        std::cout << "THERE ARE: " << meshes.size() << " MESHES" << std::endl;
+        std::cout << "WE USE: " << animatedNodes.size() << " MESHES" << std::endl;
+        Mesh mesh = mergeMeshes(meshes);
         calculateTangentsAndBitangents(mesh);
 
         window.registerKeyCallback([&](int key, int /* scancode */, int action, int /* mods */) {
@@ -782,32 +1044,6 @@ int main(int argc, char** argv)
             };
         });
 
-        // Shading functionality
-        const Shader debugShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/debug_frag.glsl").build();
-        const Shader lightShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/light_vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_frag.glsl").build();
-        const Shader lambertShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/lambert_frag.glsl").build();
-        const Shader phongShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/phong_frag.glsl").build();
-        const Shader blinnPhongShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/blinn_phong_frag.glsl").build();
-        const Shader toonDiffuseShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_diffuse_frag.glsl").build();
-        const Shader toonSpecularShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/toon_specular_frag.glsl").build();
-        const Shader xToonShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/xtoon_frag.glsl").build();
-        const Shader pbrShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/pbr_frag.glsl").build();   
-
-        const Shader normalShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/normal_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/normal_frag.glsl").build();
-        const Shader minimapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/minimap_frag.glsl").build(); 
-        const Shader mapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/vertex.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/map_frag.glsl").build(); 
-        
-        const Shader mainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader_frag.glsl").build();
-        const Shader shadowShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow_frag.glsl").build();
-        const Shader lightTextureShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/light_texture_frag.glsl").build();
-        const Shader secondaryMainShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shader_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shader2_frag.glsl").build();
-        const Shader shadowShader2 = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/shadow_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/shadow2_frag.glsl").build();
-
-        const Shader screenShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/post_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/post_frag.glsl").build();
-        const Shader particleShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/particle_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/particle_frag.glsl").build();
-              
-        const Shader envMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/skybox_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/skybox_frag.glsl").build();  
-        const Shader otherEnvMapShader = ShaderBuilder().addStage(GL_VERTEX_SHADER, RESOURCE_ROOT "shaders/env_map_vert.glsl").addStage(GL_FRAGMENT_SHADER, RESOURCE_ROOT "shaders/env_map_frag.glsl").build();      
         
         #pragma region DefineBuffer
 
@@ -1143,12 +1379,64 @@ int main(int argc, char** argv)
         
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
-
+        float time = 0.0f;
+        float timeIncrement = 0.0125f;
         // Main loop.
         while (!window.shouldClose()) {
             window.updateInput();
-
+            // time = static_cast<float>(glfwGetTime())/1000.0f;
             imgui();
+
+
+            if(hierarchicalTransform) {
+                //std::cout<<time<<std::endl;
+                //glm::mat4 bigIndependentSphereTransform = getBigIndependentSphereTransform(time);
+                glm::mat4 bigSphereTransform = getBigSphereTransform(time);
+                glm::mat4 mediumSphereTransform = getMediumSphereTransform(bigSphereTransform, time);
+                glm::mat4 smallSphere1Transform = getSmallSphere1Transform(mediumSphereTransform, time);
+                glm::mat4 smallSphere2Transform = getSmallSphere2Transform(mediumSphereTransform, time);
+
+                //Mesh& updatedMesh = meshes[6];
+                // for (auto& vertex : meshes[6].vertices) {
+                //         vertex.position = glm::vec3(bigIndependentSphereTransform* glm::vec4(vertex.position, 1.0f));
+                //         vertex.normal = glm::mat3(glm::transpose(glm::inverse(bigIndependentSphereTransform))) * vertex.normal; // Correct normal
+                // }
+                //updatedMesh = meshes[5];
+                for (auto& vertex : meshes[5].vertices) {
+                        vertex.position = glm::vec3(bigSphereTransform* glm::vec4(vertex.position, 1.0f));
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(bigSphereTransform))) * vertex.normal; // Correct normal
+                }
+                //updatedMesh = meshes[3];
+                for (auto& vertex : meshes[3].vertices) {
+                        vertex.position = glm::vec3(mediumSphereTransform* glm::vec4(vertex.position, 1.0f));
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(mediumSphereTransform))) * vertex.normal; // Correct normal
+                }
+                //updatedMesh = meshes[4];
+                for (auto& vertex : meshes[4].vertices) {
+                        vertex.position = glm::vec3(smallSphere1Transform* glm::vec4(vertex.position, 1.0f));
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere1Transform))) * vertex.normal; // Correct normal
+                }
+                //updatedMesh = meshes[7];
+                for (auto& vertex : meshes[7].vertices) {
+                        vertex.position = glm::vec3(smallSphere2Transform* glm::vec4(vertex.position, 1.0f));
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere2Transform))) * vertex.normal; // Correct normal
+                }
+
+                for(Node* node : animatedNodes) {
+                    Mesh& updatedMesh = meshes[node->meshIndex];
+                    for (auto& vertex : updatedMesh.vertices) {
+                        vertex.position = glm::vec3(node->worldTransform * glm::vec4(vertex.position, 1.0f));
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(node->worldTransform))) * vertex.normal; // Correct normal
+                    }
+                }
+                mesh = mergeMeshes(meshes);
+
+                glBindBuffer(GL_ARRAY_BUFFER, vbo); 
+                glBufferSubData(GL_ARRAY_BUFFER, 0, mesh.vertices.size() * sizeof(Vertex), mesh.vertices.data());
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+                glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, mesh.triangles.size() * sizeof(glm::uvec3), mesh.triangles.data());
+            }
 
             // Set the active camera
             if (isTopViewCamera) {
@@ -1163,10 +1451,107 @@ int main(int argc, char** argv)
                 activeCamera = &mainCamera; // Original camera view set by the toml file
             }
 
+
+
             // Clear the framebuffer to black and depth to maximum value (ranges from [-1.0 to +1.0]).
             glViewport(0, 0, window.getWindowSize().x, window.getWindowSize().y);
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            if(dayNight) {
+                
+                lights.clear();
+                selectedLightIndex = -1;
+        
+                bool day = false;
+                
+                glm::mat4 lightTransform = getDayLightTransform(time);
+                
+                for (auto& vertex : meshes[6].vertices) {
+                        vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
+                        if(vertex.position.y > 0.0f) {
+                            day = true; 
+                            posForSun = vertex.position;
+                        }
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(lightTransform))) * vertex.normal; 
+                }
+                for (auto& vertex : meshes[11].vertices) {
+                        vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
+                        if(!day) {
+                            posForMoon = vertex.position;
+                        }
+                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(lightTransform))) * vertex.normal; 
+                }
+                isDay = day;
+                if(!day) {
+                    if(lights.size() < 1) {
+                        moonLight.position = posForMoon;
+                        lights.push_back(moonLight);
+                        selectedLightIndex = lights.size()-1;
+                    }
+                    else if(distance(lights[selectedLightIndex].position, posForSun) < 2.0f * rotationSpeed) {
+                        lights.erase(lights.begin() + selectedLightIndex);
+                        moonLight.position = posForMoon;
+                        lights.push_back(moonLight);
+                        selectedLightIndex = lights.size()-1;
+                    } else {
+                        bool alreadyNight = false;
+                        for(int i = 0; i < lights.size(); i++) {
+                            if(distance(lights[selectedLightIndex].position, posForMoon) < 2.0f * rotationSpeed) {
+                                moonLight.position = posForMoon;
+                                selectedLightIndex = i;
+                                alreadyNight = true;
+                                break;
+                            }
+                        }
+                        if(!alreadyNight) {
+                            moonLight.position = posForMoon;
+                            lights.push_back(moonLight);
+                            selectedLightIndex = lights.size()-1;
+                        }
+                    }
+                   
+                }
+                else {
+                    if(lights.size() < 1) {
+                        sunLight.position = posForSun;
+                        lights.push_back(sunLight);
+                    
+                        selectedLightIndex = lights.size()-1;
+                    }
+                    else if(distance(lights[selectedLightIndex].position, posForMoon) < 0.1f) {
+                        lights.erase(lights.begin() + selectedLightIndex);
+                        sunLight.position = posForSun;
+                    lights.push_back(sunLight);
+                    
+                    selectedLightIndex = lights.size()-1;
+                    } else {
+                        bool alreadyDay = false;
+                        for(int i = 0; i < lights.size(); i++) {
+                            if(distance(lights[selectedLightIndex].position, posForSun) < 0.1f) {
+                                sunLight.position = posForSun;
+                                selectedLightIndex = i;
+                                alreadyDay = true;
+                                break;
+                            }
+                        }
+                        if(!alreadyDay) {
+                            sunLight.position = posForSun;
+                            lights.push_back(sunLight);
+                            selectedLightIndex = lights.size()-1;
+                        }
+                    }
+
+                }
+
+                mesh = mergeMeshes(meshes);
+
+                glBindBuffer(GL_ARRAY_BUFFER, vbo); 
+                glBufferSubData(GL_ARRAY_BUFFER, 0, mesh.vertices.size() * sizeof(Vertex), mesh.vertices.data());
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+                glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, mesh.triangles.size() * sizeof(glm::uvec3), mesh.triangles.data());
+            }
 
             // Light projection matrix
             constexpr float fov = glm::pi<float>() / 4.0f;
@@ -1677,7 +2062,10 @@ int main(int argc, char** argv)
             }
             
             }
-            
+            if(time < 0.05f)
+            time += timeIncrement;
+            //time = time/50.0f;
+            else time = 0.0f;
             window.swapBuffers();
         }
 
@@ -1692,6 +2080,9 @@ int main(int argc, char** argv)
         glDeleteVertexArrays(1, &vao);
         glDeleteVertexArrays(1, &quadVAO);
         glDeleteBuffers(1, &quadVBO);
+        glDeleteBuffers(1, &skyboxVBO);
+        glDeleteBuffers(1, &skyboxVAO);
+        glDeleteBuffers(1, &skyboxIBO);
     } 
     //#pragma endregion
     //#pragma region Animation
@@ -2165,3 +2556,8 @@ int main(int argc, char** argv)
     return 0;
 }
 //#pragma endregion
+
+
+
+
+

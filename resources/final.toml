@@ -1,5 +1,5 @@
 [mesh]
-path = "resources/scene.obj"
+path = "resources/space.obj"
 animated = false
 
 [material]
