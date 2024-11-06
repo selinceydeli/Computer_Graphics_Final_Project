@@ -68,13 +68,13 @@ struct Node {
 };
 // Constants
 float rotationSpeed = 0.0005f; // Orbit speed for bigIndependentSphere
-const float ORBIT_SPEED_BIG = -0.5f;            // Opposite orbit speed for bigSphere
-const float ORBIT_SPEED_MEDIUM = 1.0f;          // Orbit speed for mediumSphere around bigSphere
-const float ORBIT_SPEED_SMALL_1 = 1.0f;         // Orbit speed for smallSphere1 around mediumSphere
-const float ORBIT_SPEED_SMALL_2 = -0.75f;        // Opposite orbit speed for smallSphere2
+float bigSphereSpeed = -0.25f;            // Opposite orbit speed for bigSphere
+float mediumSphereSpeed = 0.5f;          // Orbit speed for mediumSphere around bigSphere
+float smallSphereSpeed1 = 1.0f;         // Orbit speed for smallSphere1 around mediumSphere
+float smallSphereSpeed2 = -0.75f;        // Opposite orbit speed for smallSphere2
 
 float spinSpeed = 0.30f;                  // Spin speed around each sphere's axis
-float SPIN_SPEED = 0.30f; 
+float spinSpeedSpheres = 0.50f; 
 
 
 // Function to compute transformation matrices for each sphere (sun & moon)
@@ -91,40 +91,41 @@ glm::mat4 getDayLightTransform(float time) {
 
 glm::mat4 getBigSphereTransform(float m) {
     glm::mat4 transform = glm::mat4(1.0f);
-    float orbitAngle = ORBIT_SPEED_BIG * m;
-    transform = glm::rotate(glm::mat4(1.0f), -orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                glm::translate(glm::mat4(1.0f), -glm::vec3(0.00250f, 0.0f, 0.0f)) *
-                glm::rotate(glm::mat4(1.0f), -SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+    float orbitAngle = bigSphereSpeed * m;
+    transform = glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00250f, 0.0f, 0.0f));// *
+                //glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m , glm::vec3(0.0f, 1.0f, 0.0f));
     return transform;
 }
 
 glm::mat4 getMediumSphereTransform(glm::mat4 bigSphereTransform, float m) {
     glm::mat4 transform = glm::mat4(1.0f);
-    float orbitAngle = ORBIT_SPEED_MEDIUM * m;
+    //m = 1.0f;
+    float orbitAngle = mediumSphereSpeed * m;
     transform = bigSphereTransform *
-                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                glm::translate(glm::mat4(1.0f), glm::vec3(0.00125f, 0.0f, 0.0f)) *
-                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::rotate(glm::mat4(1.0f),orbitAngle, glm::vec3(0, 1, 0)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00125f, 0.0f, 0.0f));// *
+                //glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0, 1, 0));
     return transform;
 }
 
 glm::mat4 getSmallSphere1Transform(glm::mat4 mediumSphereTransform, float m) {
     glm::mat4 transform = glm::mat4(1.0f);
-    float orbitAngle = ORBIT_SPEED_SMALL_1 * m;
+    float orbitAngle = smallSphereSpeed1 * m;
     transform = mediumSphereTransform *
-                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                glm::translate(glm::mat4(1.0f), glm::vec3(0.0000520f, 0.0f, 0.0f)) *
-                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m /50.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0, 1, 0)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00520f, 0.0f, 0.0f));// *
+                //glm::rotate(glm::mat4(1.0f), SPIN_SPEED *m, glm::vec3(0, 1, 0));
     return transform;
 }
 
 glm::mat4 getSmallSphere2Transform(glm::mat4 mediumSphereTransform, float m) {
     glm::mat4 transform = glm::mat4(1.0f);
-    float orbitAngle = ORBIT_SPEED_SMALL_2 * m;
+    float orbitAngle = smallSphereSpeed2 * m;
     transform = mediumSphereTransform *
-                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                glm::translate(glm::mat4(1.0f), -glm::vec3(0.000120f, 0.0f, 0.0f)) *
-                glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::rotate(glm::mat4(1.0f), orbitAngle, glm::vec3(0, 1, 0)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(0.00120f, 0.0f, 0.0f));// *
+                //glm::rotate(glm::mat4(1.0f), SPIN_SPEED * m, glm::vec3(0, 1, 0));
     return transform;
 }
 
@@ -141,33 +142,6 @@ void updateNodeTransform(Node* node, float time) {
     
 }
 
-// std::vector<Node*> animatedNodes;
-// std::vector<Node*> getAnimatedNodes() {
-//     Node bigSphere {0.5f, 850.0f, -1};
-//     bigSphere.meshIndex = 5;
-//     //bigSphere.radius = 0.6;
-//     //bigSphere.spinPeriod = 600.0f;
-
-//     Node mediumSphere {0.3f, 500.0f, 1, 3.944f, 500.0f}; 
-//     mediumSphere.meshIndex = 3;
-//     bigSphere.children.push_back(&mediumSphere);
-//     Node smallSphere1 {0.2f, 300.0f, 2, 1.797f, 200.0f};
-    
-//     smallSphere1.meshIndex = 4;
-//     mediumSphere.children.push_back(&smallSphere1);
-//     Node smallSphere2 {0.2f, 150.0f, 2, 1.932f, 800.0f};
-//     smallSphere2.meshIndex = 7;
-//     mediumSphere.children.push_back(&smallSphere2);
-//     Node bigIndependentSphere {0.6f, 600.0f, -1};
-//     bigIndependentSphere.meshIndex = 6;
-//     //std::vector<Node*> animatedNodes;
-//     animatedNodes.push_back(&bigIndependentSphere);
-//     animatedNodes.push_back(&bigSphere);
-//     animatedNodes.push_back(&mediumSphere);
-//     animatedNodes.push_back(&smallSphere1);
-//     animatedNodes.push_back(&smallSphere2);
-//     return animatedNodes;
-// }
 
 // Animated textures - global variables
 float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
@@ -375,6 +349,14 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Hierarchical Transformations", &hierarchicalTransform);
+    if(hierarchicalTransform) {
+        ImGui::Text("Rotation speed controller");
+        ImGui::SliderFloat("Big sphere speed", &bigSphereSpeed, -2.5f, 2.5f);
+        ImGui::SliderFloat("Medium sphere speed", &mediumSphereSpeed, -2.5f, 2.5f);
+        ImGui::SliderFloat("First small sphere speed", &smallSphereSpeed1, -2.5f, 2.5f);
+        ImGui::SliderFloat("Second small sphere speed", &smallSphereSpeed2, -2.5f, 2.5f);
+        //ImGui::SliderFloat("Spinning speed", &spinSpeedSpheres, 0.01f, 5.0f);
+    }
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Day/Night System", &dayNight);
@@ -914,87 +896,7 @@ int main(int argc, char** argv)
         //const Mesh mesh = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/scene.obj"));
         //hierarchicalTransform
         std::vector<Mesh> meshes = loadMesh(mesh_path);
-        // std::vector<Mesh> meshes_without;
-        // meshes_without.push_back(meshes.at(0));
-        // meshes_without.push_back(meshes.at(1));
-        // meshes_without.push_back(meshes.at(2));
-        // meshes_without.push_back(meshes.at(3));
-        // meshes_without.push_back(meshes.at(4));
-        // meshes_without.push_back(meshes.at(5));
-        // meshes_without.push_back(meshes.at(6));
-        // meshes_without.push_back(meshes.at(7));
 
-        //GPUMesh mesh_parent(meshes.at(4));
-        //GPUMesh mesh_child(meshes.at(3));
-        // Node bigSphere;
-        // bigSphere.meshIndex = 5;
-        // Node mediumSphere; 
-        // mediumSphere.meshIndex = 3;
-        // bigSphere.children.push_back(&mediumSphere);
-        // Node smallSphere1;
-        // smallSphere1.meshIndex = 4;
-        // mediumSphere.children.push_back(&smallSphere1);
-        // Node smallSphere2;
-        // smallSphere2.meshIndex = 7;
-        // mediumSphere.children.push_back(&smallSphere2);
-        // Node bigIndependentSphere;
-        // bigIndependentSphere.meshIndex = 6;
-        Node bigSphere {0.5f, 850.0f, -1};
-        bigSphere.meshIndex = 5;
-        bigSphere.name = "bigSphere";
-        //bigSphere.radius = 0.6;
-        //bigSphere.spinPeriod = 600.0f;
-
-        Node mediumSphere {0.3f, 600.0f, 0, 0.003944f, 500.0f}; 
-        mediumSphere.meshIndex = 3;
-        mediumSphere.name = "mediumSphere";
-        bigSphere.children.push_back(&mediumSphere);
-        Node smallSphere1 {0.15f, 400.0f, 1, 0.001797f, 200.0f};
-
-        smallSphere1.meshIndex = 4;
-        mediumSphere.children.push_back(&smallSphere1);
-        smallSphere1.name = "smallSphere1";
-        Node smallSphere2 {0.2f, 350.0f, 1, 0.001932f, 800.0f};
-        smallSphere2.meshIndex = 7;
-        smallSphere2.name = "smallSphere2";
-        mediumSphere.children.push_back(&smallSphere2);
-        // Node bigIndependentSphere {0.6f, 600.0f, -1};
-        // bigIndependentSphere.meshIndex = 6;
-        std::vector<Node> allNodes;
-        std::vector<Node*> animatedNodes;
-               
-        //animatedNodes.push_back(&bigIndependentSphere);
-        // animatedNodes.push_back(&bigSphere);
-        // animatedNodes.push_back(&mediumSphere);
-        // animatedNodes.push_back(&smallSphere1);
-        // animatedNodes.push_back(&smallSphere2);
-
-        // allNodes.push_back(Node {
-        //     .radius = 1.0f, 
-        //     .spinPeriod = 850.0f,
-        //     .meshIndex = 5
-        // });
-        // allNodes.push_back(Node {
-        //     .radius = 0.6f,
-        //     .spinPeriod = 500.0f,
-        //     .orbitAround = 1,
-        //     .
-        // })
-        allNodes.push_back(bigSphere);
-        allNodes.push_back(mediumSphere);
-        allNodes.push_back(smallSphere1);
-        allNodes.push_back(smallSphere2);
-        // std::vector<Node*> animatedNodes = getAnimatedNodes();
-        // std::cout << "orbitAround of first small: " << animatedNodes.at(3)->orbitAround << std::endl;
-        // std::cout << "orbitAround of first small: " << animatedNodes.at(1)->orbitAround << std::endl;
-        // animatedNodes.push_back(&bigIndependentSphere);
-        animatedNodes.push_back(&bigSphere);
-        animatedNodes.push_back(&mediumSphere);
-        animatedNodes.push_back(&smallSphere1);
-        animatedNodes.push_back(&smallSphere2);
-
-        std::cout << "THERE ARE: " << meshes.size() << " MESHES" << std::endl;
-        std::cout << "WE USE: " << animatedNodes.size() << " MESHES" << std::endl;
         Mesh mesh = mergeMeshes(meshes);
         calculateTangentsAndBitangents(mesh);
 
@@ -1380,55 +1282,39 @@ int main(int argc, char** argv)
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
         float time = 0.0f;
-        float timeIncrement = 0.0125f;
+        float timeIncrement = 0.00125f;
         // Main loop.
         while (!window.shouldClose()) {
             window.updateInput();
-            // time = static_cast<float>(glfwGetTime())/1000.0f;
             imgui();
 
 
             if(hierarchicalTransform) {
-                //std::cout<<time<<std::endl;
-                //glm::mat4 bigIndependentSphereTransform = getBigIndependentSphereTransform(time);
                 glm::mat4 bigSphereTransform = getBigSphereTransform(time);
                 glm::mat4 mediumSphereTransform = getMediumSphereTransform(bigSphereTransform, time);
                 glm::mat4 smallSphere1Transform = getSmallSphere1Transform(mediumSphereTransform, time);
                 glm::mat4 smallSphere2Transform = getSmallSphere2Transform(mediumSphereTransform, time);
 
-                //Mesh& updatedMesh = meshes[6];
-                // for (auto& vertex : meshes[6].vertices) {
-                //         vertex.position = glm::vec3(bigIndependentSphereTransform* glm::vec4(vertex.position, 1.0f));
-                //         vertex.normal = glm::mat3(glm::transpose(glm::inverse(bigIndependentSphereTransform))) * vertex.normal; // Correct normal
-                // }
                 //updatedMesh = meshes[5];
-                for (auto& vertex : meshes[5].vertices) {
+                for (auto& vertex : meshes[6].vertices) {
                         vertex.position = glm::vec3(bigSphereTransform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(bigSphereTransform))) * vertex.normal; // Correct normal
                 }
                 //updatedMesh = meshes[3];
-                for (auto& vertex : meshes[3].vertices) {
+                for (auto& vertex : meshes[2].vertices) {
                         vertex.position = glm::vec3(mediumSphereTransform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(mediumSphereTransform))) * vertex.normal; // Correct normal
                 }
-                //updatedMesh = meshes[4];
-                for (auto& vertex : meshes[4].vertices) {
+                for (auto& vertex : meshes[3].vertices) {
                         vertex.position = glm::vec3(smallSphere1Transform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere1Transform))) * vertex.normal; // Correct normal
                 }
-                //updatedMesh = meshes[7];
-                for (auto& vertex : meshes[7].vertices) {
+                //updatedMesh = meshes[4];
+                for (auto& vertex : meshes[4].vertices) {
                         vertex.position = glm::vec3(smallSphere2Transform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere2Transform))) * vertex.normal; // Correct normal
                 }
 
-                for(Node* node : animatedNodes) {
-                    Mesh& updatedMesh = meshes[node->meshIndex];
-                    for (auto& vertex : updatedMesh.vertices) {
-                        vertex.position = glm::vec3(node->worldTransform * glm::vec4(vertex.position, 1.0f));
-                        vertex.normal = glm::mat3(glm::transpose(glm::inverse(node->worldTransform))) * vertex.normal; // Correct normal
-                    }
-                }
                 mesh = mergeMeshes(meshes);
 
                 glBindBuffer(GL_ARRAY_BUFFER, vbo); 
@@ -1467,7 +1353,7 @@ int main(int argc, char** argv)
                 
                 glm::mat4 lightTransform = getDayLightTransform(time);
                 
-                for (auto& vertex : meshes[6].vertices) {
+                for (auto& vertex : meshes[5].vertices) {
                         vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
                         if(vertex.position.y > 0.0f) {
                             day = true; 
@@ -1475,7 +1361,7 @@ int main(int argc, char** argv)
                         }
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(lightTransform))) * vertex.normal; 
                 }
-                for (auto& vertex : meshes[11].vertices) {
+                for (auto& vertex : meshes[7].vertices) {
                         vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
                         if(!day) {
                             posForMoon = vertex.position;
@@ -2062,10 +1948,11 @@ int main(int argc, char** argv)
             }
             
             }
-            if(time < 0.05f)
+            if(time <= 0.1f&&time>=0.05) time -= timeIncrement;
+            else if(time < 0.05)
             time += timeIncrement;
             //time = time/50.0f;
-            else time = 0.0f;
+            else time = 0.1f;
             window.swapBuffers();
         }
 

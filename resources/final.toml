@@ -1,5 +1,6 @@
 [mesh]
-path = "resources/space.obj"
+#path = "resources/spaceQuirky3.obj"
+path = "resources/randomIdea.obj"
 animated = false
 
 [material]
