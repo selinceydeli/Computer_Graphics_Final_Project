@@ -1,4 +1,4 @@
-#include "gpu_mesh.h"
+// #include "gpu_mesh.h"
 // Disable compiler warnings in third-party code (which we cannot change).
 #include <framework/disable_all_warnings.h>
 #include <framework/opengl_includes.h>
@@ -260,6 +260,7 @@ size_t selectedLightIndex = 0;
 std::vector<Light> secondaryLights {};
 size_t selectedSecondaryLightIndex = 0;
 
+#pragma region  Particle Definition
 // Particle effect helper methods
 unsigned int lastEliminatedParticle;
 glm::vec3 posForSun = glm::vec3(0.0f);
@@ -269,16 +270,19 @@ Light moonLight {posForMoon, glm::vec3(0.15), false, glm::vec3(0, 0, 0) };
 
 // Method for initializing the values for a new particle
 void setParticleValues(Particle &particle, glm::vec2 offset) {
-    particle.life = 50.0f; // Define the lifetime of the particles
+    particle.life = 3.0f; // Define the lifetime of the particles
     float brightness = 0.5f - static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / 0.5f));
     particle.color = glm::vec4(1.0, brightness * 0.2f, 0.0f, 1.0f); 
     particle.position = glm::vec2(
         offset.x + static_cast<float>(rand()) / RAND_MAX * 1.0f, 
         offset.y + static_cast<float>(rand()) / RAND_MAX * 1.0f  
     );  
+    // Generate a random direction with uniform distribution
+    float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * glm::pi<float>();
+    float speedMagnitude = static_cast<float>(rand()) / RAND_MAX * 2.0f; 
     particle.speed = glm::vec2(
-        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f, 
-        static_cast<float>(rand()) / RAND_MAX * 0.2f - 0.1f  
+        cos(angle) * speedMagnitude,
+        sin(angle) * speedMagnitude
     );
 }
 
@@ -288,14 +292,8 @@ void initializeRandomSeed() {
 
 // Method for getting the next particle index to be eliminated from the scene
 unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Particle>& particlesArray) {
-    unsigned int idx = 0;
-    for (idx = lastEliminatedParticle; idx < particleNum; idx++) {
-        if (particlesArray[idx].life <= 0.0f) {
-            lastEliminatedParticle = idx;
-            return idx;
-        }
-    }
-    for (idx = 0; idx < lastEliminatedParticle; idx++) {
+    for (unsigned int i = 0; i < particleNum; i++) {
+        unsigned int idx = (lastEliminatedParticle + i) % particleNum;
         if (particlesArray[idx].life <= 0.0f) {
             lastEliminatedParticle = idx;
             return idx;
@@ -304,11 +302,7 @@ unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Partic
     lastEliminatedParticle = 0;
     return 0;
 }
-
-void replaceParticle(Particle& particle) {
-    //TODO
-}
-
+#pragma endregion
 void resetLights()
 {
     lights.clear();
@@ -853,13 +847,12 @@ int main(int argc, char** argv)
     const float dt = 0.01;
     std::vector<Particle> particles;
   
+    glm::vec2 particleEmitter = glm::vec2(0.0f, 0.0f);
     for (unsigned int i = 0; i < numParticles; ++i)
     {
         particles.push_back(Particle());
-        setParticleValues(particles[i], glm::vec2(0.0f, 0.0f));
+        setParticleValues(particles[i], particleEmitter);
     }
-
-    glm::vec2 particleEmitter = glm::vec2(-5.0, 5.0);
 
     //#pragma region Render
     // Shading functionality
@@ -1649,19 +1642,22 @@ int main(int argc, char** argv)
                 const int updateParticleSize = 2;
                 for (size_t i = 0; i < updateParticleSize; i++) {
                     int deleteIndex = nextEliminatedParticle(numParticles, particles);
-                    replaceParticle(particles[deleteIndex]);
+                    setParticleValues(particles[deleteIndex], particleEmitter);
                 }
                 for (size_t i = 0; i < numParticles; i++) {
                     particles[i].life -= dt;
                     if (particles[i].life > 0.0) { // If particles haven't faded away yet
                         particles[i].position += particles[i].speed * dt;
-                        particles[i].color.y += 0.02 * dt;
+                        particles[i].color.y += 0.2 * dt;
                     }
                 }
 
                 // Particle render
                 particleShader.bind();
                 glUniformMatrix4fv(particleShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+                glActiveTexture(GL_TEXTURE0);  
+                glBindTexture(GL_TEXTURE_2D, texToon); 
+                glUniform1i(xToonShader.getUniformLocation("texToon"), 0);  
                 glBindVertexArray(quadVAO);
                 for (Particle& particle : particles)
                 {
