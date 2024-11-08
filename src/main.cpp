@@ -1,4 +1,3 @@
-// #include "gpu_mesh.h"
 // Disable compiler warnings in third-party code (which we cannot change).
 #include <framework/disable_all_warnings.h>
 #include <framework/opengl_includes.h>
@@ -148,6 +147,7 @@ float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
 float animatedTextureLastFrameTime = 0.0f;
 int animatedTextureCurrentFrame = 0;
 bool dayNight = false;
+bool hasFog = true;
 
 
 std::vector<Mesh> animationMeshes; 
@@ -393,6 +393,9 @@ void imgui()
     ImGui::Separator();
     ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
     ImGui::Checkbox("Enable Particle Collision", &isParticleCollision);
+  
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Fog Effect", &hasFog);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
@@ -1367,7 +1370,6 @@ int main(int argc, char** argv)
             }
 
 
-
             // Clear the framebuffer to black and depth to maximum value (ranges from [-1.0 to +1.0]).
             glViewport(0, 0, window.getWindowSize().x, window.getWindowSize().y);
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1862,8 +1864,7 @@ int main(int argc, char** argv)
                     // do nothing!!! (no specular lighting)
                     break;
             }
-
-            if (shadows || pcf || lights[selectedLightIndex].is_spotlight) {
+            if (shadows || pcf || lights[selectedLightIndex].is_spotlight || hasFog) {
                 mainShader.bind();
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, texShadow);
@@ -1871,12 +1872,18 @@ int main(int argc, char** argv)
                 int isSpotlightInt = lights[selectedLightIndex].is_spotlight ? 1 : 0;
                 int shadowsInt = shadows ? 1 : 0;
                 int pcfInt = pcf ? 1 : 0;
+                int fogMode = hasFog ? 1 : 0;
                 glUniform1i(mainShader.getUniformLocation("isSpotlight"), isSpotlightInt);
                 glUniform1i(mainShader.getUniformLocation("shadows"), shadowsInt);
                 glUniform1i(mainShader.getUniformLocation("pcf"), pcfInt);
+                glUniform1i(mainShader.getUniformLocation("fogMode"), fogMode);
                 glUniformMatrix4fv(mainShader.getUniformLocation("mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
                 glUniformMatrix4fv(mainShader.getUniformLocation("lightMVP"), 1, GL_FALSE, glm::value_ptr(lightMVP));
                 glUniform3fv(mainShader.getUniformLocation("lightPos"), 1, glm::value_ptr(lights[selectedLightIndex].position));
+                glUniform3fv(mainShader.getUniformLocation("viewPos"), 1, glm::value_ptr(cameraPos));// 在每帧更新雾气参数（如果需要动态变化）
+                float time = glfwGetTime();
+                float fogDensity = sin(time) * 0.5 + 0.5; // calculate fog density
+                glUniform1f(mainShader.getUniformLocation("fogDensity"), fogDensity);
                 glBlendFunc(GL_DST_COLOR, GL_ZERO);
                 render(mainShader);
             }
