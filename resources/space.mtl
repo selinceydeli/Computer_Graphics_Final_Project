@@ -10,7 +10,7 @@ Ke 0.0 0.0 0.0
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd C:\\Users\\DIANA\\OneDrive\\Desktop\\Education\\Courses\\MSc\\3D Computer Graphics\\blender_obj\\Rocket_Ship_v1_L3.123c485c9e1d-6d02-47cf-b751-9606e55c8fa1\\10475_Rocket_Ship_v1_Diffuse.jpg
+# map_Kd C:\\Users\\DIANA\\OneDrive\\Desktop\\Education\\Courses\\MSc\\3D Computer Graphics\\blender_obj\\Rocket_Ship_v1_L3.123c485c9e1d-6d02-47cf-b751-9606e55c8fa1\\10475_Rocket_Ship_v1_Diffuse.jpg
 
 newmtl Default_OBJ
 Ns 225.000000
@@ -101,4 +101,4 @@ Ke 0.0 0.0 0.0
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd C:\\Users\\DIANA\\OneDrive\\Desktop\\Education\\Courses\\MSc\\3D Computer Graphics\\blender_obj\\Rocket_Ship_v1_L3.123c485c9e1d-6d02-47cf-b751-9606e55c8fa1\\10475_Rocket_Ship_v1_Diffuse.jpg
+# map_Kd C:\\Users\\DIANA\\OneDrive\\Desktop\\Education\\Courses\\MSc\\3D Computer Graphics\\blender_obj\\Rocket_Ship_v1_L3.123c485c9e1d-6d02-47cf-b751-9606e55c8fa1\\10475_Rocket_Ship_v1_Diffuse.jpg
