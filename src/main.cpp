@@ -1083,7 +1083,7 @@ int main(int argc, char** argv)
 
         // Red brick texture
         int redBrickWidth, redBrickHeight, redBrickChannels;
-        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/red-textured-wall.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
+        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-5.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
 
         // Create a texture on the GPU with 3 channels with 8 bits each.
         GLuint texRedBrick;
@@ -1103,7 +1103,7 @@ int main(int argc, char** argv)
 
         // Rainbow texture
         int rainbowWidth, rainbowHeight, rainbowChannels;
-        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/textured-rainbow.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
+        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-3.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
 
         // Create a texture on the GPU with 3 channels with 8 bits each.
         GLuint texRainbow;
@@ -1121,8 +1121,8 @@ int main(int argc, char** argv)
         // Create Light Texture
         int texWidth, texHeight, texChannels;
         auto light_texture_path = std::string(RESOURCE_ROOT) + config["lights"]["texture_path"][0].value_or("resources/smiley.png");
-        stbi_uc* light_pixels = stbi_load(light_texture_path.c_str(), &texWidth, &texHeight, &texChannels, 3); 
-        //stbi_uc* light_pixels = stbi_load(RESOURCE_ROOT "resources/smiley.png", &texWidth, &texHeight, &texChannels, 3);
+        //stbi_uc* light_pixels = stbi_load(light_texture_path.c_str(), &texWidth, &texHeight, &texChannels, 3); 
+        stbi_uc* light_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-1.jpg", &texWidth, &texHeight, &texChannels, 3);
 
         GLuint texLight;
         glGenTextures(1, &texLight);
@@ -1156,7 +1156,7 @@ int main(int argc, char** argv)
 
         // Material Texture
         int matWidth, matHeight, matChannels;
-        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/brickwall.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-6.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
 
         GLuint texMat;
         glGenTextures(1, &texMat);
