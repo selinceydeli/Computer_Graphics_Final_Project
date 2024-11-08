@@ -147,7 +147,7 @@ float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
 float animatedTextureLastFrameTime = 0.0f;
 int animatedTextureCurrentFrame = 0;
 bool dayNight = false;
-bool hasFog = true;
+bool hasFog = false;
 
 
 std::vector<Mesh> animationMeshes; 
