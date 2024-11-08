@@ -160,6 +160,7 @@ size_t currentMeshIndex = 0;
 // Configuration
 const int WIDTH = 1200;
 const int HEIGHT = 800;
+const unsigned int numParticles = 2000;
 
 bool post_process = false;
 bool show_imgui = true;
@@ -180,6 +181,7 @@ bool toonxLighting = false;
 std::array diffuseModes {"Debug", "Lambert Diffuse", "Toon Lighting Diffuse", "Toon X Lighting", "PBR Shading", "Normal Mapping"}; std::array specularModes {"None", "Phong Specular Lighting", "Blinn-Phong Specular Lighting", "Toon Lighting Specular"}; std::array samplingModes {"Single Sample", "PCF"};bool shadows = false;bool pcf = false;bool applyTexture = false;bool multipleShadows = false;int samplingMode = 0;int diffuseMode = 0;int specularMode = 0; bool transparency = false; bool applyMinimap = false; bool applySmoothPath = false; bool showBezierCurve = false; bool moveCamera = false; bool isConstantSpeedAlongBezier = false; bool useOriginalCamera = true; bool isTopViewCamera = false; bool isFrontViewCamera = false; bool isLeftViewCamera = false; bool isRightViewCamera = false;
 
 bool isParticleEffect = false;
+bool isParticleCollision = false;
 
 float skyboxVert[] = {
     -1.0f, -1.0f, 1.0f,
@@ -254,20 +256,28 @@ struct Particle {
       : position(0.0f), speed(glm::vec2(2.0, 0.0)), color(glm::vec4(1.0, 0.0, 0.0, 1.0)), life(1.0f) { }
 };  
 
+struct Obstacle {
+    glm::vec2 position; 
+    float radius;     
+
+    Obstacle(glm::vec2 pos, float r)
+        : position(pos), radius(r) {}
+};
+
 std::vector<Light> lights {};
 size_t selectedLightIndex = 0;
 
 std::vector<Light> secondaryLights {};
 size_t selectedSecondaryLightIndex = 0;
 
-#pragma region  Particle Definition
-// Particle effect helper methods
-unsigned int lastEliminatedParticle;
 glm::vec3 posForSun = glm::vec3(0.0f);
 glm::vec3 posForMoon = glm::vec3(0.0f);
 Light sunLight {posForSun, glm::vec3(1.0f,0.842f,0.24f), false, glm::vec3(0, 0, 0) };
 Light moonLight {posForMoon, glm::vec3(0.15), false, glm::vec3(0, 0, 0) };
 
+#pragma region  Particle Definition
+// Particle effect helper methods
+unsigned int lastEliminatedParticle;
 // Method for initializing the values for a new particle
 void setParticleValues(Particle &particle, glm::vec2 offset) {
     particle.life = 3.0f; // Define the lifetime of the particles
@@ -302,7 +312,27 @@ unsigned int nextEliminatedParticle(unsigned int particleNum, std::vector<Partic
     lastEliminatedParticle = 0;
     return 0;
 }
+
+// Check if particle is colliding with the current obstable
+bool isColliding(const glm::vec2& particlePos, const Obstacle& obstacle) {
+    float dist = glm::distance(particlePos, obstacle.position);
+    // std::cout<<"Current pos & dist: [" << particlePos.x<< "," << particlePos.y <<"]  " << dist  << std::endl;
+    return dist <= obstacle.radius;
+}
+
+void handleCollision(Particle &particle, const Obstacle& obstacle) {
+    glm::vec2 particlePos = particle.position;
+    glm::vec2 particleVelocity = particle.speed;
+    glm::vec2 normal = glm::normalize(particlePos - obstacle.position);
+    particle.position = obstacle.position + normal * (obstacle.radius + 0.01f);
+    particleVelocity = particleVelocity - 2.0f * glm::dot(particleVelocity, normal) * normal;
+    float elasticity = 0.8f;
+    particle.speed *= elasticity;
+    // std::cout << "Handle Collision!!" << std::endl;
+}
+
 #pragma endregion
+
 void resetLights()
 {
     lights.clear();
@@ -362,6 +392,7 @@ void imgui()
     
     ImGui::Separator();
     ImGui::Checkbox("Enable Particle Effect", &isParticleEffect);
+    ImGui::Checkbox("Enable Particle Collision", &isParticleCollision);
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
@@ -843,7 +874,6 @@ int main(int argc, char** argv)
 
     // Initialize the particle array
     initializeRandomSeed();
-    const unsigned int numParticles = 500;
     const float dt = 0.01;
     std::vector<Particle> particles;
   
@@ -853,6 +883,12 @@ int main(int argc, char** argv)
         particles.push_back(Particle());
         setParticleValues(particles[i], particleEmitter);
     }
+
+    std::vector<Obstacle> obstacles;
+    obstacles.push_back(Obstacle(glm::vec2(1.8f, 1.8f), 0.5f));
+    obstacles.push_back(Obstacle(glm::vec2(-1.0f, -1.0f), 0.8f));
+    obstacles.push_back(Obstacle(glm::vec2(1.2f, -1.2f), 0.5f));
+    obstacles.push_back(Obstacle(glm::vec2(-1.0f, 1.5f), 0.6f));
 
     //#pragma region Render
     // Shading functionality
@@ -1647,6 +1683,13 @@ int main(int argc, char** argv)
                 for (size_t i = 0; i < numParticles; i++) {
                     particles[i].life -= dt;
                     if (particles[i].life > 0.0) { // If particles haven't faded away yet
+                        if (isParticleCollision) {
+                            for (const auto& obstacle : obstacles) {
+                                if (isColliding(particles[i].position, obstacle)) {
+                                    handleCollision(particles[i], obstacle);
+                                }
+                            }
+                        }
                         particles[i].position += particles[i].speed * dt;
                         particles[i].color.y += 0.2 * dt;
                     }
@@ -1661,15 +1704,11 @@ int main(int argc, char** argv)
                 glBindVertexArray(quadVAO);
                 for (Particle& particle : particles)
                 {
-                    // float randomX = ((rand() % 100) - 50) / 10.0f;
-                    // float randomY = ((rand() % 100) - 50) / 10.0f;
                     glUniform2fv(particleShader.getUniformLocation("offset"), 1, glm::value_ptr(particle.position));
                     glUniform4fv(particleShader.getUniformLocation("particleColor"), 1, glm::value_ptr(particle.color));
-                    // std::cout << random << std::endl;
                     glDrawArrays(GL_TRIANGLES, 0, 6);
                 }
                 glBindVertexArray(0);
-                // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Additive blending.
             }
             #pragma endregion
 
