@@ -11,11 +11,14 @@ uniform int pcf;
 // scene uniforms
 uniform mat4 lightMVP;
 uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform float fogDensity;
 
 // config uniforms, use these to control the shader from UI
 uniform int peelingMode;
 uniform int lightMode;
 uniform int lightColorMode;
+uniform int fogMode;
 
 // PCF sampling for smooth shadow
 const int pcfSamples = 2;
@@ -113,6 +116,23 @@ void main()
 
     //vec3 lighting = spotlightFactor * shadow * diffuse * color;  
     vec3 lighting = vec3(spotlightFactor * shadow * diffuse);  
-    outColor = vec4(lighting, 1.0); 
+    vec3 finalColor = lighting;
+
+    if (fogMode == 1) {
+        // Add fog
+        float fogStart = 0.0f;  
+        float fogEnd = 50.0f; 
+        float distance = length(viewPos - fragPos);
+        float fogFactor = exp(-distance * fogDensity);
+
+        vec3 closeFogColor = vec3(0.7, 0.7, 0.7);  
+        vec3 farFogColor = vec3(0.5, 0.6, 0.8); 
+
+        vec3 fogColor = mix(closeFogColor, farFogColor, fogFactor);
+        finalColor = mix(fogColor, lighting, fogFactor);
+    }
+
+    outColor = vec4(finalColor, 1.0); 
+    // outColor = vec4(vec3(fogFactor), 1.0); 
 
 }
