@@ -143,7 +143,7 @@ void updateNodeTransform(Node* node, float time) {
 
 
 // Animated textures - global variables
-float animatedTextureFrameInterval = 1.0f / 3.0f; // 3 FPS
+float animatedTexturesFrameSpeed = 3.0f; // FPS 
 float animatedTextureLastFrameTime = 0.0f;
 int animatedTextureCurrentFrame = 0;
 bool dayNight = false;
@@ -341,6 +341,9 @@ void resetLights()
 }
 bool isDay = false;
 
+float bezierCurveSpeed = 0.1;
+float bezierCurveConstantSpeed = 1.0;
+
 //#pragma region GUI
 void imgui()
 {
@@ -387,7 +390,7 @@ void imgui()
     if(dayNight) {
         if(isDay) ImGui::Text("Currently it is day!");
         else ImGui::Text("Currently it is night!");
-        ImGui::SliderFloat("Time speed", &rotationSpeed, 0.01f, 5.0f);
+        ImGui::SliderFloat("Time Speed", &rotationSpeed, 0.01f, 5.0f);
     }
     
     ImGui::Separator();
@@ -399,32 +402,37 @@ void imgui()
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Animated Textures to Light", &lights[selectedLightIndex].has_texture);
+    if(lights[selectedLightIndex].has_texture) {
+        ImGui::SliderFloat("Frame Rate", &animatedTexturesFrameSpeed, 1.0f, 10.0f);
+    }
+
     ImGui::Checkbox("Enable Shadows", &shadows);
     ImGui::Checkbox("Enable PCF", &pcf);
     ImGui::Checkbox("Shadows for Multiple Light Sources", &multipleShadows);
 
     ImGui::Separator();
     ImGui::Text("Secondary Lights");
+    if(multipleShadows) {
+        std::vector<std::string> secondaryItemStrings = {};
+        for (size_t i = 0; i < secondaryLights.size(); i++) {
+            auto string = "Secondary Light " + std::to_string(i);
+            secondaryItemStrings.push_back(string);
+        }
 
-    std::vector<std::string> secondaryItemStrings = {};
-    for (size_t i = 0; i < secondaryLights.size(); i++) {
-        auto string = "Secondary Light " + std::to_string(i);
-        secondaryItemStrings.push_back(string);
-    }
+        std::vector<const char*> secondaryItemCStrings = {};
+        for (const auto& string : secondaryItemStrings) {
+            secondaryItemCStrings.push_back(string.c_str());
+        }
 
-    std::vector<const char*> secondaryItemCStrings = {};
-    for (const auto& string : secondaryItemStrings) {
-        secondaryItemCStrings.push_back(string.c_str());
-    }
+        int tempSecondarySelectedItem = static_cast<int>(selectedSecondaryLightIndex);
+        if (ImGui::ListBox("Secondary Lights", &tempSecondarySelectedItem, secondaryItemCStrings.data(), (int)secondaryItemCStrings.size(), 1)) {
+            selectedSecondaryLightIndex = static_cast<size_t>(tempSecondarySelectedItem);
+        }
 
-    int tempSecondarySelectedItem = static_cast<int>(selectedSecondaryLightIndex);
-    if (ImGui::ListBox("Secondary Lights", &tempSecondarySelectedItem, secondaryItemCStrings.data(), (int)secondaryItemCStrings.size(), 1)) {
-        selectedSecondaryLightIndex = static_cast<size_t>(tempSecondarySelectedItem);
-    }
-
-    if (!secondaryLights.empty()) {
-        Light& selectedLight = secondaryLights[selectedSecondaryLightIndex];
-        ImGui::SliderFloat3("Secondary Light Position", &selectedLight.position[0], -10.0f, 10.0f);
+        if (!secondaryLights.empty()) {
+            Light& selectedLight = secondaryLights[selectedSecondaryLightIndex];
+            ImGui::SliderFloat3("Secondary Light Position", &selectedLight.position[0], -10.0f, 10.0f);
+        }
     }
     
     ImGui::Separator();
@@ -439,7 +447,14 @@ void imgui()
     ImGui::Separator();
     ImGui::Text("Light Movement Along the Bezier Curve");
     ImGui::Checkbox("Enable Smooth Path for Light", &applySmoothPath);
+    if(applySmoothPath) {
+        ImGui::SliderFloat("Bezier Curve Speed", &bezierCurveSpeed, 0.0f, 2.5f);
+    }
+    
     ImGui::Checkbox("Enable Constant Speed", &isConstantSpeedAlongBezier);
+    if(isConstantSpeedAlongBezier) {
+        ImGui::SliderFloat("Set Constant Speed for Bezier Curve", &bezierCurveConstantSpeed, 0.0f, 5.0f);
+    }
 
     ImGui::Separator();
     ImGui::Text("Camera Movement Along the Bezier Curve");
@@ -596,34 +611,34 @@ glm::vec3 computeBezierPoint(float t, const glm::vec3& p0, const glm::vec3& p1, 
 // Implement 5 consecutive bezier curves for the light motion
 std::vector<std::vector<glm::vec3>> bezierControlPointsSets = {
     {
-        glm::vec3(4.0f, 1.0f, 0.0f),  // p0
-        glm::vec3(3.0f, 2.5f, 4.0f),  // p1
-        glm::vec3(1.0f, 1.5f, 4.5f),  // p2
-        glm::vec3(0.0f, 1.0f, 4.0f)   // p3
+        glm::vec3(8.686661f, 1.0f, 0.000000f),  // p0
+        glm::vec3(6.486661f, 2.5f, 9.551502f),  // p1
+        glm::vec3(2.486661f, 1.5f, 10.000000f), // p2
+        glm::vec3(0.000000f, 1.0f, 9.551502f)   // p3
     },
     {
-        glm::vec3(0.0f, 1.0f, 4.0f),
-        glm::vec3(-3.0f, 1.5f, 3.0f),
-        glm::vec3(-4.5f, 2.0f, 0.0f),
-        glm::vec3(-4.5f, 1.0f, 0.0f)
+        glm::vec3(0.000000f, 1.0f, 9.551502f),
+        glm::vec3(-5.271210f, 1.5f, 6.486661f),
+        glm::vec3(-8.271210f, 2.0f, 0.000000f),
+        glm::vec3(-8.271210f, 1.0f, 0.000000f)
     },
     {
-        glm::vec3(-4.5f, 1.0f, 0.0f),
-        glm::vec3(-3.0f, 2.0f, -3.0f),
-        glm::vec3(0.0f, 1.5f, -4.0f),
-        glm::vec3(4.0f, 1.0f, 0.0f)
+        glm::vec3(-8.271210f, 1.0f, 0.000000f),
+        glm::vec3(-5.271210f, 2.0f, -7.406366f),
+        glm::vec3(0.000000f, 1.5f, -7.406366f),
+        glm::vec3(8.686661f, 1.0f, 0.000000f)
     },
     {
-        glm::vec3(4.0f, 1.0f, 0.0f),  
-        glm::vec3(2.0f, 2.0f, -4.0f),  
-        glm::vec3(-2.0f, 1.5f, -4.0f), 
-        glm::vec3(-4.0f, 1.0f, 0.0f)   
+        glm::vec3(8.686661f, 1.0f, 0.000000f),  
+        glm::vec3(4.686661f, 2.0f, -7.406366f),  
+        glm::vec3(-4.271210f, 1.5f, -7.406366f), 
+        glm::vec3(-8.271210f, 1.0f, 0.000000f)   
     },
     {
-        glm::vec3(-4.0f, 1.0f, 0.0f),   
-        glm::vec3(-2.0f, 1.5f, 2.0f),   
-        glm::vec3(2.0f, 1.5f, 2.0f),    
-        glm::vec3(4.0f, 1.0f, 0.0f)    
+        glm::vec3(-8.271210f, 1.0f, 0.000000f),   
+        glm::vec3(-4.271210f, 1.5f, 4.271210f),   
+        glm::vec3(4.271210f, 1.5f, 4.271210f),    
+        glm::vec3(8.686661f, 1.0f, 0.000000f)    
     }
 };
  
@@ -638,7 +653,7 @@ std::vector<glm::vec3> middlePlaneBezierCurve =
 
 void changeLightPosAlongBezierCurves(float timeChange) {
     if (currentCurve < bezierControlPointsSets.size()) {
-        float speedFactor = 0.1;
+        float speedFactor = bezierCurveSpeed;
         t += timeChange * speedFactor;
         if (t > 1.0) {
             t = 0.0;
@@ -702,7 +717,7 @@ glm::vec3 interpolate(const glm::vec3& start, const glm::vec3& end, float t) {
 void moveLightAlongEvenlySpacedPath(float timeChange) {
     static size_t idx = 0;
     static float accumulatedDist = 0.0f;
-    float speed = 0.5f;  
+    float speed = bezierCurveConstantSpeed;  
 
     if (bezierCurvePathEven.empty()) return;
     accumulatedDist += timeChange * speed;
@@ -777,7 +792,7 @@ int main(int argc, char** argv)
 
     // Add only one secondary light source
     secondaryLights = std::vector<Light> {};
-    glm::vec3 pos = glm::vec3(-3.766f, 3.243f, -0.503f);
+    glm::vec3 pos = glm::vec3(-8.963f, 16.235f, -8.286f);
     glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 direction = glm::normalize(target - pos);
     auto color = tomlArrayToVec3(config["lights"]["colors"][0].as_array()).value();
@@ -841,8 +856,8 @@ int main(int argc, char** argv)
     mainCamera.setCamera(look_at, rotations, dist);
 
     Trackball topViewCamera { &window, glm::radians(fovY) };
-    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); 
-    topViewCamera.setCamera(look_at, topViewRotations, dist);
+    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); // Rotate to top view
+    topViewCamera.setCamera(glm::vec3(0.0f, 0.0f, 0.0f), topViewRotations, 30.0f);
 
     Trackball rightViewCamera { &window, glm::radians(fovY) };
     glm::vec3 rightViewRotations = glm::vec3(0.0f, glm::radians(90.0f), 0.0f);
@@ -1114,7 +1129,7 @@ int main(int argc, char** argv)
 
         // Red brick texture
         int redBrickWidth, redBrickHeight, redBrickChannels;
-        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/red-textured-wall.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
+        stbi_uc* red_brick_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-5.jpg", &redBrickWidth, &redBrickHeight, &redBrickChannels, STBI_rgb);
 
         // Create a texture on the GPU with 3 channels with 8 bits each.
         GLuint texRedBrick;
@@ -1134,7 +1149,7 @@ int main(int argc, char** argv)
 
         // Rainbow texture
         int rainbowWidth, rainbowHeight, rainbowChannels;
-        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/textured-rainbow.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
+        stbi_uc* rainbow_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-3.jpg", &rainbowWidth, &rainbowHeight, &rainbowChannels, STBI_rgb);
 
         // Create a texture on the GPU with 3 channels with 8 bits each.
         GLuint texRainbow;
@@ -1152,8 +1167,8 @@ int main(int argc, char** argv)
         // Create Light Texture
         int texWidth, texHeight, texChannels;
         auto light_texture_path = std::string(RESOURCE_ROOT) + config["lights"]["texture_path"][0].value_or("resources/smiley.png");
-        stbi_uc* light_pixels = stbi_load(light_texture_path.c_str(), &texWidth, &texHeight, &texChannels, 3); 
-        //stbi_uc* light_pixels = stbi_load(RESOURCE_ROOT "resources/smiley.png", &texWidth, &texHeight, &texChannels, 3);
+        //stbi_uc* light_pixels = stbi_load(light_texture_path.c_str(), &texWidth, &texHeight, &texChannels, 3); 
+        stbi_uc* light_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-1.jpg", &texWidth, &texHeight, &texChannels, 3);
 
         GLuint texLight;
         glGenTextures(1, &texLight);
@@ -1187,7 +1202,7 @@ int main(int argc, char** argv)
 
         // Material Texture
         int matWidth, matHeight, matChannels;
-        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/brickwall.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
+        stbi_uc* mat_pixels = stbi_load(RESOURCE_ROOT "resources/texture-space-6.jpg", &matWidth, &matHeight, &matChannels, STBI_rgb);
 
         GLuint texMat;
         glGenTextures(1, &texMat);
@@ -1302,7 +1317,6 @@ int main(int argc, char** argv)
         // Animated textures
         std::vector<GLuint> texFrames;
         texFrames.push_back(texLight);
-        //texFrames.push_back(texToon);
         texFrames.push_back(texNormal);
         texFrames.push_back(texMat);
         texFrames.push_back(texRainbow);
@@ -1723,6 +1737,7 @@ int main(int argc, char** argv)
 
             // Animated textures - cycle through textures
             float currTime = glfwGetTime();
+            float animatedTextureFrameInterval = 1.0f / animatedTexturesFrameSpeed; 
             if (currTime - animatedTextureLastFrameTime >= animatedTextureFrameInterval) {
                 animatedTextureCurrentFrame = (animatedTextureCurrentFrame + 1) % texFrames.size();
                 animatedTextureLastFrameTime = currTime;
