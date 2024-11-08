@@ -263,6 +263,113 @@ struct Obstacle {
     Obstacle(glm::vec2 pos, float r)
         : position(pos), radius(r) {}
 };
+void calculateNormals(Mesh& mesh) {
+    std::vector<glm::vec3> normals(mesh.vertices.size(), glm::vec3(0.0f));
+
+    // Compute normals for each triangle
+    for (const auto& triangle : mesh.triangles) {
+        glm::vec3 v0 = mesh.vertices[triangle.x].position;
+        glm::vec3 v1 = mesh.vertices[triangle.y].position;
+        glm::vec3 v2 = mesh.vertices[triangle.z].position;
+
+        glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+        normals[triangle.x] += normal;
+        normals[triangle.y] += normal;
+        normals[triangle.z] += normal;
+    }
+
+    // Normalize the accumulated normals
+    for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+        mesh.vertices[i].normal = glm::normalize(normals[i]);
+    }
+}
+
+float randomGradient(int x, int z) {
+    int n = x + z * 57;
+    n = (n << 13) ^ n;
+    return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
+}
+
+// Linear interpolation function
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+// Fade function to smooth the transitions (cubic easing)
+float fade(float t) {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+// 2D value noise function
+float noiseFunction(float x, float z) {
+    int x0 = std::floor(x);
+    int x1 = x0 + 1;
+    int z0 = std::floor(z);
+    int z1 = z0 + 1;
+
+    float sx = fade(x - x0);
+    float sz = fade(z - z0);
+
+    // Calculate noise contributions from the four corners
+    float n0 = randomGradient(x0, z0);
+    float n1 = randomGradient(x1, z0);
+    float n2 = randomGradient(x0, z1);
+    float n3 = randomGradient(x1, z1);
+
+    // Interpolate between gradient values
+    float ix0 = lerp(n0, n1, sx);
+    float ix1 = lerp(n2, n3, sx);
+    float value = lerp(ix0, ix1, sz);
+
+    return value;
+}
+
+Mesh generateProceduralTerrain(float offsetX, float offsetZ, int tileSize, float scale) {
+    Mesh terrainMesh;
+    int resolution = 256; // The number of grid points along one axis
+    float amplitude = 1.0f; // Max height variation for the terrain
+
+    // Calculate half-size to center the terrain around (0, 0, 0)
+    float halfSize = tileSize / 2.0f;
+
+    // Generate vertices
+    for (int z = 0; z < resolution; ++z) {
+        for (int x = 0; x < resolution; ++x) {
+            // Adjust the world coordinates so that the terrain is centered at (0, 0, 0)
+            float worldX = offsetX + (x * (tileSize / (float)(resolution - 1))) - halfSize;
+            float worldZ = offsetZ + (z * (tileSize / (float)(resolution - 1))) - halfSize;
+            float height = 10.0f + noiseFunction(worldX * scale, worldZ * scale) * amplitude;
+
+            // Add the vertex (position, normal placeholder, texture coordinate)
+            terrainMesh.vertices.push_back(Vertex{
+                glm::vec3(worldX, height, worldZ),
+                glm::vec3(0, 1, 0), // Placeholder normal
+                glm::vec2(x / (float)(resolution - 1), z / (float)(resolution - 1))
+            });
+        }
+    }
+
+    // Generate indices for triangle strips
+    for (int z = 0; z < resolution - 1; ++z) {
+        for (int x = 0; x < resolution - 1; ++x) {
+            int topLeft = z * resolution + x;
+            int topRight = topLeft + 1;
+            int bottomLeft = (z + 1) * resolution + x;
+            int bottomRight = bottomLeft + 1;
+
+            // First triangle
+            terrainMesh.triangles.push_back(glm::uvec3(topLeft, bottomLeft, topRight));
+            // Second triangle
+            terrainMesh.triangles.push_back(glm::uvec3(topRight, bottomLeft, bottomRight));
+        }
+    }
+
+    // Calculate normals for shading
+    calculateNormals(terrainMesh);
+
+    return terrainMesh;
+}
 
 std::vector<Light> lights {};
 size_t selectedLightIndex = 0;
@@ -941,8 +1048,10 @@ int main(int argc, char** argv)
         //const Mesh mesh = loadMesh(mesh_path)[0];
         //const Mesh mesh = mergeMeshes(loadMesh(mesh_path));
         //const Mesh mesh = mergeMeshes(loadMesh(RESOURCE_ROOT "build/resources/scene.obj"));
-        //hierarchicalTransform
+
         std::vector<Mesh> meshes = loadMesh(mesh_path);
+        Mesh terrainMesh = generateProceduralTerrain(0.0f, 0.0f, 100, 10.0f);
+        meshes.push_back(terrainMesh);
 
         Mesh mesh = mergeMeshes(meshes);
         calculateTangentsAndBitangents(mesh);
@@ -1342,21 +1451,21 @@ int main(int argc, char** argv)
                 glm::mat4 smallSphere2Transform = getSmallSphere2Transform(mediumSphereTransform, time);
 
                 //updatedMesh = meshes[5];
-                for (auto& vertex : meshes[6].vertices) {
+                for (auto& vertex : meshes[4].vertices) {
                         vertex.position = glm::vec3(bigSphereTransform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(bigSphereTransform))) * vertex.normal; // Correct normal
                 }
                 //updatedMesh = meshes[3];
-                for (auto& vertex : meshes[2].vertices) {
+                for (auto& vertex : meshes[8].vertices) {
                         vertex.position = glm::vec3(mediumSphereTransform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(mediumSphereTransform))) * vertex.normal; // Correct normal
                 }
-                for (auto& vertex : meshes[3].vertices) {
+                for (auto& vertex : meshes[2].vertices) {
                         vertex.position = glm::vec3(smallSphere1Transform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere1Transform))) * vertex.normal; // Correct normal
                 }
                 //updatedMesh = meshes[4];
-                for (auto& vertex : meshes[4].vertices) {
+                for (auto& vertex : meshes[3].vertices) {
                         vertex.position = glm::vec3(smallSphere2Transform* glm::vec4(vertex.position, 1.0f));
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(smallSphere2Transform))) * vertex.normal; // Correct normal
                 }
@@ -1398,7 +1507,7 @@ int main(int argc, char** argv)
                 
                 glm::mat4 lightTransform = getDayLightTransform(time);
                 
-                for (auto& vertex : meshes[5].vertices) {
+                for (auto& vertex : meshes[10].vertices) {
                         vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
                         if(vertex.position.y > 0.0f) {
                             day = true; 
@@ -1406,7 +1515,7 @@ int main(int argc, char** argv)
                         }
                         vertex.normal = glm::mat3(glm::transpose(glm::inverse(lightTransform))) * vertex.normal; 
                 }
-                for (auto& vertex : meshes[7].vertices) {
+                for (auto& vertex : meshes[6].vertices) {
                         vertex.position = glm::vec3(lightTransform * glm::vec4(vertex.position, 1.0f));
                         if(!day) {
                             posForMoon = vertex.position;
