@@ -14,6 +14,6 @@ uniform vec2 offset;
 void main() {
     fragPos = texPos;
     fragCoords = texCoords;
-    float scale = 0.02;
-    gl_Position = mvp * vec4(texPos.x * scale + offset.x, 0, texPos.y * scale + offset.y, 1.0); 
+    float scale = 0.05;
+    gl_Position = mvp * vec4(texPos.x * scale + offset.x, 10, texPos.y * scale + offset.y, 1.0); 
 }
