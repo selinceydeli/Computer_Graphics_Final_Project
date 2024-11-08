@@ -339,7 +339,7 @@ Mesh generateProceduralTerrain(float offsetX, float offsetZ, int tileSize, float
             // Adjust the world coordinates so that the terrain is centered at (0, 0, 0)
             float worldX = offsetX + (x * (tileSize / (float)(resolution - 1))) - halfSize;
             float worldZ = offsetZ + (z * (tileSize / (float)(resolution - 1))) - halfSize;
-            float height = 10.0f + noiseFunction(worldX * scale, worldZ * scale) * amplitude;
+            float height = 25.0f + noiseFunction(worldX * scale, worldZ * scale) * amplitude;
 
             // Add the vertex (position, normal placeholder, texture coordinate)
             terrainMesh.vertices.push_back(Vertex{
@@ -448,8 +448,8 @@ void resetLights()
 }
 bool isDay = false;
 
-float bezierCurveSpeed = 0.1;
-float bezierCurveConstantSpeed = 1.0;
+float bezierCurveSpeed = 0.5;
+float bezierCurveConstantSpeed = 3.5;
 
 //#pragma region GUI
 void imgui()
@@ -899,7 +899,7 @@ int main(int argc, char** argv)
 
     // Add only one secondary light source
     secondaryLights = std::vector<Light> {};
-    glm::vec3 pos = glm::vec3(-8.963f, 16.235f, -8.286f);
+    glm::vec3 pos = glm::vec3(-7.826f, 11.491f, -13.188f);
     glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 direction = glm::normalize(target - pos);
     auto color = tomlArrayToVec3(config["lights"]["colors"][0].as_array()).value();
@@ -964,7 +964,7 @@ int main(int argc, char** argv)
 
     Trackball topViewCamera { &window, glm::radians(fovY) };
     glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); // Rotate to top view
-    topViewCamera.setCamera(glm::vec3(0.0f, 0.0f, 0.0f), topViewRotations, 30.0f);
+    topViewCamera.setCamera(glm::vec3(0.0f, 0.0f, 0.0f), topViewRotations, 20.0f);
 
     Trackball rightViewCamera { &window, glm::radians(fovY) };
     glm::vec3 rightViewRotations = glm::vec3(0.0f, glm::radians(90.0f), 0.0f);
