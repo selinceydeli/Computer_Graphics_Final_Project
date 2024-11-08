@@ -814,8 +814,8 @@ int main(int argc, char** argv)
     mainCamera.setCamera(look_at, rotations, dist);
 
     Trackball topViewCamera { &window, glm::radians(fovY) };
-    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); 
-    topViewCamera.setCamera(look_at, topViewRotations, dist);
+    glm::vec3 topViewRotations = glm::vec3(glm::radians(90.0f), 0.0f, 0.0f); // Rotate to top view
+    topViewCamera.setCamera(glm::vec3(0.0f, 0.0f, 0.0f), topViewRotations, 30.0f);
 
     Trackball rightViewCamera { &window, glm::radians(fovY) };
     glm::vec3 rightViewRotations = glm::vec3(0.0f, glm::radians(90.0f), 0.0f);
