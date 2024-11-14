@@ -1,6 +1,8 @@
 # Computer Graphics Final Project
 
-The features we have added as part of the project is listed below. 
+## Implemented Features
+
+The features implemented as part of this project are listed below.
 
 #### Minimap
 The minimap is implemented in two render passes. The first render pass captures the top view of the scene. During the first rendering pass, the top view of the scene is captured under diffuse lighting with an ambient term to simulate constant, indirect light in the scene. The output of the first render pass is stored in a texture. The second render pass renders the minimap stored in the texture on a small window in the main scene (at the top-right corner).
@@ -70,34 +72,35 @@ The images show the day-look, night-look and the transferring from day to night.
 #### Procedurally Generated Terrain
 For the procedural terrain generation, a new mesh was created algorithmically and then added to the rest of the scene meshes. This was done by defining a grid of points and vertices, where each point on the grid is a position in space. Then, for every point on the grid, a mathematical noise function was used to generate a random corresponding height. The noise function makes use of the coordinates of the point, and then generates a pseudo-random value by generating a random gradient for each corner, and then interpolating those values. Then, from these coordinates, vertices are created and then added to triangles.
 
-### Demo Video
+## Demo Video
 
 You can watch our demo on [YouTube](https://youtu.be/RUFY5gcM-zM).
 
-### Contributions of the Team Members
+## Contributions of the Team Members
 
 Here is the list of contributions from our group. 
 
-#### Selin Ceydeli
-Minimap
-Smooth Path using Bézier curves
-Multiple Viewpoints
-Bézier Curve Constant Speed
-Multiple Shadows from Different Light Sources
-Animated Textures
-Particle Effects (Starry Night Stars Effect) -Contributed equally with Lemon
+#### Selin Ceydeli  
+Minimap  
+Smooth Path using Bézier curves  
+Multiple Viewpoints  
+Bézier Curve Constant Speed  
+Multiple Shadows from Different Light Sources  
+Animated Textures  
+Particle Effects (Starry Night Stars Effect) -Contributed equally with Lemon  
 
-#### Lemon He
-Particle Effects (Starry Night Stars Effect) -Contributed equally with Selin 
-PBR Shader
-Material Textures
-Normal mapping
-Post-processing effects (glow) Fog Effect
-Particle Collision
+#### Lemon He  
+Particle Effects (Starry Night Stars Effect) -Contributed equally with Selin   
+PBR Shader  
+Material Textures  
+Normal mapping  
+Post-processing effects (glow) Fog Effect  
+Particle Collision  
 
-#### Diana Banta
-Environment Map
-Hierarchical transformations 
-Day-Night Effect
-Procedurally Generated Terrain
+#### Diana Banta  
+Environment Map  
+Hierarchical transformations   
+Day-Night Effect  
+Procedurally Generated Terrain  
+
   
