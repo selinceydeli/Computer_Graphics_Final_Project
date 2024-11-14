@@ -30,7 +30,7 @@ To simulate animated textures, the textures are stored in a vector. On each fram
 To create a starry effect above our objects, we emit particles that stay on a fixed plane above them. Once generated, the particles will be given initial life span, speed, color and position. Upon every frame, we will check if some particles have walked past their entire life, they will be replaced by new-born particles from the emitter. During each update, the particles’ properties gradually change to create a dynamic, shimmering effect. This continuous cycle of birth, transformation, and replacement simulates starry particle effects that add a magical ambiance to the scene.
   
 #### PBR Shader
-The PBR shader computes lights into three parts, separately specular light, diffuse light and ambient light. For the theory part, I referred to the Real Shading in Unreal Engine 4.
+The PBR shader computes lights into three parts, separately specular light, diffuse light and ambient light. For the theory part, I referred to the [Real Shading in Unreal Engine 4](https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf).
 For the calculation, the shader begins by calculating the view, light, and halfway vectors, which are essential for shading calculations based on the fragment’s position and normal.
 The specular reflection is computed using the Cook-Torrance model, which combines the Fresnel effect, normal distribution function and geometry function to simulate realistic reflections. The Fresnel effect adjusts reflectivity based on the view angle, the NDF models the microfacet distribution across the surface, and the geometry function accounts for the shadowing and masking of light between microfacets.
 Diffuse lighting is implemented as a simple Lambertian reflection, modulated by the material’s albedo color.
@@ -42,10 +42,10 @@ While the second one shows a more plastic like output.
 The new Materials for the textures we have currently include albedo(the base color), roughness(controls the sharpness of specular highlights), metallic(defines the material’s reflectivity), and light intensity(parameter to scale the radiance).
 By using these parameters in the PBR shader, we can easily create metal-like textures or normal plastic ones.
 
-#### Normal mapping
+#### Normal Mapping
 Instead of using the normal value from vao, we use the normal map, which has the value of the normals on each point stored on the x, y, and z channels in the image. Since the normals are in the tangent space, we need to transform them into world space. To achieve this, we calculate tangent and bitangent vectors for each vertex to form a Tangent-Bitangent-Normal (TBN) matrix. This matrix transforms the normals from tangent space to world space, allowing the normal map’s details to be applied correctly in the scene’s lighting calculations. Finally, we sample the normal map for each fragment and transform it using the TBN matrix, integrating it seamlessly into the lighting model for added surface detail. Since the normals are pre-defined, we can achieve a three-dimensional effect on a plane with little extra calculation.
   
-#### Post-processing effects (glow)
+#### Post-processing Effects (Glow)
 We're using a double render pass to do the post-processing. So first we create a frame buffer and bind a screen texture to store the current result of the first render pass. Then we use this texture in our second render pass as the base color. In the second render, we isolate the brightest parts of a scene, applying a blur to create a soft halo, and then adding this halo back onto the original image. Through this, we can create a soft light around bright areas, making objects look like they emit light.
   
 #### Fog Effect
@@ -59,7 +59,7 @@ Once colliding the 4 circle obstacles, the particles will be rebounced.
 #### Environment Map
 The environment map is done by first creating a cubemap texture from 6 square 2D texture images. This is done by iterating through each image and then binding it to one face of the cube. Then, in the rendering loop, the cubemap is sampled by calculating the reflection angle from the position of the object to the camera, and the corresponding color value is looked up from the cubemap texture. The final result is meshes that have a reflective aspect.
   
-#### Hierarchical transformations
+#### Hierarchical Transformations
 For better demonstration, please refer to the video.
 The hierarchical transformations feature works by adding 4 more meshes, representing the planets. “Big sphere” influences all of the others, while “Medium sphere” influences the two “Small meshes”. For each iteration of the render loop, a “time” parameter is calculated, and this is used to control the transformations and rotations of the spheres. Every time, the positions of the spheres are recomputed and updated in the scene. The child meshes use the new computed position of the parents in the calculation, to ensure that the dependency relationship is preserved. Once the new positions are calculated, for each vertex in each mesh the position is updated. Lastly, the buffers for the scene are updated to draw the new results.
   
@@ -72,9 +72,9 @@ For the procedural terrain generation, a new mesh was created algorithmically an
 
 ### Demo Video
 
-Youtube video for our demo: https://youtu.be/RUFY5gcM-zM Contributions of the Team Members:
+You can watch our demo on [YouTube](https://youtu.be/RUFY5gcM-zM).
 
-### Contributions
+### Contributions of the Team Members
 
 Here is the list of contributions from our group. 
 
