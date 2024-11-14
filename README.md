@@ -87,10 +87,10 @@ Multiple Viewpoints
 Bézier Curve Constant Speed  
 Multiple Shadows from Different Light Sources  
 Animated Textures  
-Particle Effects (Starry Night Stars Effect) -Contributed equally with Lemon  
+Particle Effects (Starry Night Stars Effect) *-Contributed equally with Lemon* 
 
 #### Lemon He  
-Particle Effects (Starry Night Stars Effect) -Contributed equally with Selin   
+Particle Effects (Starry Night Stars Effect) *-Contributed equally with Selin* 
 PBR Shader  
 Material Textures  
 Normal mapping  
@@ -102,5 +102,3 @@ Environment Map
 Hierarchical transformations   
 Day-Night Effect  
 Procedurally Generated Terrain  
-
-  
