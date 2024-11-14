@@ -9,19 +9,19 @@ The minimap is implemented in two render passes. The first render pass captures 
 Smooth Path is implemented using 5 consecutive cubic Bézier curves as a trajectory for the light source. The implementation interpolates the light's position along predefined paths by calculating points based on control points. The control points of the cubic Bézier curves are defined so that the light moves smoothly from one curve to the next along the 5 consecutive cubic Bézier curves.
 
 Similarly, movement along a cubic Bézier curve is implemented for the camera. The trajectory of the camera movement follows one cubic Bézier curve to simulate a third-person camera that comes closer to the scene (this is also implemented for the purpose of the multiple viewpoints feature).
-The mathematical formulation for the Cubic Bézier curves is implemented by following the “Cubic Bézier curves” section here. Also referred to the Lecture 4 - Computer Animation slides for further information about the Bézier curves.
+
+The mathematical formulation for the Cubic Bézier curves is implemented by following the “Cubic Bézier curves” section [here](https://en.wikipedia.org/wiki/B%C3%A9zier_curve). Also referred to the Lecture 4 - Computer Animation slides for further information about the Bézier curves.
      
 #### Multiple Viewpoints
 The multiple viewpoints feature is implemented by defining separate Trackball camera instances for different perspectives: main, top, right, left, and front views. Each camera is configured with specific rotation angles and distances to dynamically provide different views of the scene. To achieve dynamic switching of cameras, a pointer for each camera is defined, and the active camera instance is dynamically switched to the correct camera pointer within the main rendering loop.
     
 #### Bézier Curve Constant Speed
-A constant speed motion along the Bézier curve is implemented for light movement in the following steps. Firstly, evenly spaced points along each curve segment is calculated. These points are then stored in an array for creating a precomputed path for smooth traversal. Lastly, the position of the light source is updated along the recomputed path, interpolating between consecutive points based on the elapsed time and maintaining a consistent speed. Interpolation between consecutive points was implemented to smooth the path because without it, the linear segments in the light movement were visible, making the motion appear unrealistic. To conceptually understand the constant speed motion along the Bézier curve, this article is read.
+A constant speed motion along the Bézier curve is implemented for light movement in the following steps. Firstly, evenly spaced points along each curve segment is calculated. These points are then stored in an array for creating a precomputed path for smooth traversal. Lastly, the position of the light source is updated along the recomputed path, interpolating between consecutive points based on the elapsed time and maintaining a consistent speed. Interpolation between consecutive points was implemented to smooth the path because without it, the linear segments in the light movement were visible, making the motion appear unrealistic. To conceptually understand the constant speed motion along the Bézier curve, [this article](https://medium.com/@ommand/movement-along-the-curve-with-constant-speed-4fa383941507) is read.
     
 #### Multiple Shadows from Different Light Sources
 To achieve multiple shadows from different light sources, a secondary light source is added to the scene. A secondary shadow texture is then created, along with a new framebuffer for this texture. The shadow maps for both the primary and secondary light sources are rendered sequentially.
+
 Once both shadow maps are generated, they are combined in the final rendering pass. This is done by sampling from both shadow textures in the fragment shader and applying shadow calculations for each light source independently. The resulting shadow contributions are then blended to create the effect of multiple shadows interacting on the scene.
-Before adding multiple shadows (shadows are generated only using the primary light source):
-After adding multiple shadows using the secondary light source, the scene looks like below:
   
 #### Animated Textures
 To simulate animated textures, the textures are stored in a vector. On each frame update, the time elapsed since the last texture change is calculated. If this elapsed time exceeds the specified frame interval, the next texture in the sequence is displayed, and the light color is updated accordingly. This approach ensures consistent frame updates and allows users to control the animation speed through the UI. Additionally, users can adjust the frame rate per second, ensuring that the animation runs smoothly at an appropriate framerate, independent of the computer's performance.
@@ -69,4 +69,35 @@ The images show the day-look, night-look and the transferring from day to night.
    
 #### Procedurally Generated Terrain
 For the procedural terrain generation, a new mesh was created algorithmically and then added to the rest of the scene meshes. This was done by defining a grid of points and vertices, where each point on the grid is a position in space. Then, for every point on the grid, a mathematical noise function was used to generate a random corresponding height. The noise function makes use of the coordinates of the point, and then generates a pseudo-random value by generating a random gradient for each corner, and then interpolating those values. Then, from these coordinates, vertices are created and then added to triangles.
+
+### Demo Video
+
+Youtube video for our demo: https://youtu.be/RUFY5gcM-zM Contributions of the Team Members:
+
+### Contributions
+
+Here is the list of contributions from our group. 
+
+#### Selin Ceydeli
+Minimap
+Smooth Path using Bézier curves
+Multiple Viewpoints
+Bézier Curve Constant Speed
+Multiple Shadows from Different Light Sources
+Animated Textures
+Particle Effects (Starry Night Stars Effect) -Contributed equally with Lemon
+
+#### Lemon He
+Particle Effects (Starry Night Stars Effect) -Contributed equally with Selin 
+PBR Shader
+Material Textures
+Normal mapping
+Post-processing effects (glow) Fog Effect
+Particle Collision
+
+#### Diana Banta
+Environment Map
+Hierarchical transformations 
+Day-Night Effect
+Procedurally Generated Terrain
   
